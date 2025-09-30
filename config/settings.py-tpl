@@ -46,7 +46,7 @@ INSTALLED_APPS = [
 
 # Third-party apps
 
-INSTALLED_APPS += ["django_prodserver", "django_extensions", "django_htmx"]
+INSTALLED_APPS += ["django_prodserver", "django_extensions", "django_htmx", "django_tailwind_cli"]
 
 # Our apps
 
@@ -54,7 +54,7 @@ INSTALLED_APPS += ["core"]
 
 # Local development only apps
 if DEBUG:
-    INSTALLED_APPS += ["django_tailwind_cli", "django_browser_reload"]
+    INSTALLED_APPS += ["django_browser_reload"]
 
 
 MIDDLEWARE = [

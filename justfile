@@ -134,9 +134,9 @@ bootstrap *ARGS:
         --rm \
         utility uv run python -m pytest {{ ARGS }}
 
-# Start containers
+# Start containers with file watching
 @up *ARGS:
-    docker compose up {{ ARGS }}
+    docker compose up --watch {{ ARGS }}
 
 # Upgrade dependencies and lock
 @upgrade:

@@ -31,7 +31,29 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         --no-install-project
 
 # ------------------------------------------------------------
-# Stage 2: Release - Final production image
+# Step 2: Development layer
+# ------------------------------------------------------------
+
+FROM builder AS dev
+
+# Install development dependencies
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --frozen --dev
+
+COPY . /src/
+
+WORKDIR /src/
+
+# Place executables in the environment at the front of the path
+ENV PATH="/src/.venv/bin:$PATH"
+
+# Development server with hot reload
+CMD ["uv", "run", "--frozen", "-m", "manage", "devserver", "--skip-checks", "0.0.0.0:8000"]
+
+# ------------------------------------------------------------
+# Stage 3: Release - Final production image
 # ------------------------------------------------------------
 FROM builder AS release
 
@@ -47,10 +69,10 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # Download the TailwindCSS CLI
 # Using SQLite memory database and dummy secret key during build
-# RUN DATABASE_URL=sqlite://:memory: SECRET_KEY=build-key uv run --frozen -m manage tailwind --skip-checks download_cli
+RUN DATABASE_URL=sqlite://:memory: SECRET_KEY=build-key uv run --frozen -m manage tailwind --skip-checks download_cli
 
 # Build the TailwindCSS styles
-# RUN DATABASE_URL=sqlite://:memory: SECRET_KEY=build-key uv run --frozen -m manage tailwind --skip-checks build
+RUN DATABASE_URL=sqlite://:memory: SECRET_KEY=build-key uv run --frozen -m manage tailwind --skip-checks build
 
 # Collect static files for production serving
 RUN DATABASE_URL=sqlite://:memory: SECRET_KEY=build-key uv run --frozen -m manage collectstatic --noinput --clear
