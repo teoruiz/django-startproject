@@ -138,5 +138,8 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
+# CSS Tailwind file
+frontend/css/tailwind.css
+
 # Custom compose options
 compose.override.yml

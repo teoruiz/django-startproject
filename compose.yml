@@ -59,5 +59,13 @@ services:
       - "8000:8000"
     tty: true
 
+  tailwind-sidecar:
+    <<: *common-settings
+    env_file:
+      - .env
+    command: ["uv", "run", "-m", "manage", "tailwind", "watch"]
+    tty: true
+
+
 volumes:
   postgres-data:

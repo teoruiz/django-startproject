@@ -46,13 +46,16 @@ INSTALLED_APPS = [
 
 # Third-party apps
 
-INSTALLED_APPS += [
-    "django_prodserver",
-]
+INSTALLED_APPS += ["django_prodserver", "django_extensions", "django_htmx"]
 
 # Our apps
 
-INSTALLED_APPS += []
+INSTALLED_APPS += ["core"]
+
+# Local development only apps
+if DEBUG:
+    INSTALLED_APPS += ["django_tailwind_cli", "django_browser_reload"]
+
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -63,6 +66,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "django_htmx.middleware.HtmxMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -165,3 +169,9 @@ PRODUCTION_PROCESSES = {
         "ARGS": {"bind": "0.0.0.0:8000", "workers": "2"},
     }
 }
+
+# Tailwind CLI
+TAILWIND_CLI_SRC_REPO = "dobicinaitis/tailwind-cli-extra"
+TAILWIND_CLI_ASSET_NAME = "tailwindcss-extra"
+TAILWIND_CLI_USE_DAISY_UI = True
+TAILWIND_CLI_SRC_CSS = "frontend/css/source.css"
