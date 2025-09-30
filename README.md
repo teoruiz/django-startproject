@@ -1,11 +1,13 @@
 <h1 align="center">Welcome to django-startproject 👋</h1>
 <p>
-  <a href="https://github.com/jefftriplett/django-startproject/actions" target="_blank">
-    <img alt="CI" src="https://github.com/jefftriplett/django-startproject/workflows/CI/badge.svg" />
+  <a href="https://github.com/teoruiz/django-startproject/actions" target="_blank">
+    <img alt="CI" src="https://github.com/teoruiz/django-startproject/workflows/CI/badge.svg" />
   </a>
 </p>
 
 > Django startproject template with batteries
+>
+> Forked from [jefftriplett/django-startproject](https://github.com/jefftriplett/django-startproject) with modern frontend tooling and API support
 
 ## :triangular_flag_on_post: Core Features
 
@@ -20,37 +22,62 @@
 ## :triangular_flag_on_post: Django Features
 
 - django-click
-- django-prodserver[gunicorn]
+- django-prodserver
+- django-ninja (REST API framework)
+- django-htmx (dynamic interactions)
+- django-storages
+- django-extensions
+- django-tailwind-cli (with django-extensions support)
 - environs[django]
 - psycopg[binary]
 - whitenoise
+- httpx
+- uvicorn
+
+## :art: Frontend
+
+- Tailwind CSS v4 (CSS-first configuration)
+- DaisyUI (component library)
+- HTMX (dynamic interactions)
+- Dark mode support
 
 ## :shirt: Linting/auto-formatting
 
 - pre-commit (using prek)
   - Standard hooks (check-added-large-files, check-json, check-toml, check-yaml, etc.)
   - ruff (linting and formatting)
+  - djlint (Django template linting)
   - pyupgrade (Python 3.13+)
   - django-upgrade (Django 5.0+)
   - djhtml (Django template formatting)
   - djade (Django 5.2 compatibility)
   - blacken-docs (format code in documentation)
 
-### :green_heart: CI
+## :green_heart: Testing
 
 - django-test-plus
+- django-browser-reload (dev)
 - model-bakery
 - pytest
 - pytest-django
 
-### 🏠 [Homepage](https://github.com/jefftriplett/django-startproject)
+## 📚 Additional Features
+
+- Multi-stage Docker build (dev/release)
+- CLAUDE.md included for AI-assisted development
+- llms.txt for LLM context
+- Base templates with Tailwind CSS v4
+- Django Ninja API (`/api/hello` example endpoint)
+
+### 🏠 [Homepage](https://github.com/teoruiz/django-startproject)
+### 🔗 [Original Project](https://github.com/jefftriplett/django-startproject)
 
 ## :wrench: Install
 
 ```shell
 $ uv run --with=django django-admin startproject \
     --extension=ini,py,toml,yaml,yml \
-    --template=https://github.com/jefftriplett/django-startproject/archive/main.zip \
+    --template=https://github.com/teoruiz/django-startproject/archive/main.zip \
     example_project
 
 $ cd example_project
@@ -133,9 +160,13 @@ Available recipes:
 ```
 <!-- [[[end]]] -->
 
-## Author
+## Authors
 
-👤 **Jeff Triplett**
+👤 **Teo Ruiz** (Fork maintainer)
+
+* GitHub: [@teoruiz](https://github.com/teoruiz)
+
+👤 **Jeff Triplett** (Original author)
 
 * Website: https://jefftriplett.com
 * Micro Blog: https://micro.webology.dev
@@ -154,7 +185,7 @@ Available recipes:
 
 ## 🤝 Contributing
 
-Contributions, issues and feature requests are welcome!<br />Feel free to check [issues page](https://github.com/jefftriplett/django-startproject/issues).
+Contributions, issues and feature requests are welcome!<br />Feel free to check [issues page](https://github.com/teoruiz/django-startproject/issues).
 
 ## Show your support
 
