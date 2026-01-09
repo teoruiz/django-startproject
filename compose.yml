@@ -1,8 +1,12 @@
-x-common-settings: &common-settings
+x-common-settings:
+  &common-settings # Set UID/GID in .env if your user is not 1000 (e.g., macOS uses 501)
   build:
     context: .
-    dockerfile: ./Dockerfile
+    dockerfile: Dockerfile
     target: dev
+    args:
+      UID: "${UID:-1000}"
+      GID: "${GID:-1000}"
   depends_on:
     db:
       condition: service_healthy
@@ -10,28 +14,16 @@ x-common-settings: &common-settings
     - "ALLOWED_HOSTS=*"
     - "DATABASE_URL=postgres://postgres@db/postgres"
     - "DJANGO_DEBUG=true"
-  restart: on-failure
-  #volumes:
-  #  - .:/src:cache
-  develop:
-    # Create a `watch` configuration to update the app
-    # https://docs.docker.com/compose/file-watch/#compose-watch-versus-bind-mounts
-    watch:
-      # Sync the working directory with the `/app` directory in the container
-      - action: sync
-        path: .
-        target: /src
-        # Exclude the project virtual environment — it could be for a
-        # different platform in the container
-        ignore:
-          - .venv/
-
-      # Rebuild the image if dependencies change by checking uv.lock
-      - action: rebuild
-        path: ./uv.lock
+    - "UV_CACHE_DIR=/cache/uv"
+  env_file: .env
+  tty: true
+  volumes:
+    - .:/src:cache
+    - venv:/src/.venv
+    - uvcache:/cache/uv
+    - django-tailwind-cli-data:/src/.django_tailwind_cli
 
 services:
-
   db:
     environment:
       - "POSTGRES_HOST_AUTH_METHOD=trust"
@@ -40,48 +32,50 @@ services:
       interval: 10s
       timeout: 0.5s
       retries: 3
-    image: "pgautoupgrade/pgautoupgrade:latest"
+    image: "pgautoupgrade/pgautoupgrade:17-alpine"
     init: true
     user: postgres
     volumes:
       - .:/src:cache
       - postgres-data:/var/lib/postgresql/data/
 
+  worker:
+    <<: *common-settings
+    command: ["/src/start-worker.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "./healthcheck-worker.sh"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    init: true
+
   utility:
     <<: *common-settings
-    command: [
-      "uv",
-      "run",
-      "-m",
-      "manage",
-      "--version"
-    ]
-    tty: true
+    command: ["uv", "run", "-m", "manage", "--version"]
+    entrypoint: ["/src/compose-entrypoint.sh"]
 
   web:
     <<: *common-settings
-    command: [
-      "uv",
-      "run",
-      "-m",
-      "manage",
-      "devserver",
-      "--skip-checks",
-      "0.0.0.0:8000"
-    ]
-    entrypoint: ["/src/compose-entrypoint.sh"]
+    command: ["/src/start-dev.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "./healthcheck-web.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     init: true
     ports:
       - "8000:8000"
     tty: true
 
-  tailwind-sidecar:
+  tailwind:
     <<: *common-settings
-    env_file:
-      - .env
-    command: ["uv", "run", "-m", "manage", "tailwind", "watch"]
-    tty: true
-
+    command: ["/src/start-tailwind.sh"]
+    init: true
 
 volumes:
   postgres-data:
+  django-tailwind-cli-data:
+  venv:
+  uvcache:

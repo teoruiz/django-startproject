@@ -1,12 +1,15 @@
 [project]
 name = "{{ project_name }}"
-version = "0.1.0"
+version = "2026.1.1"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "django<6.0",
+    "blessed",
+    "django",
     "django-click",
+    "django-q2",
+    "django-health-check",
     "django-prodserver",
     "environs[django]",
     "psycopg[binary]",
@@ -18,6 +21,7 @@ dependencies = [
     "django-storages",
     "django-extensions",
     "django-tailwind-cli[django-extensions]",
+    "django-unfold",
     "uvicorn",
 ]
 
@@ -31,6 +35,26 @@ dev = [
     "django-browser-reload",
     "django-test-plus",
     "djlint",
+    "django-types",
+]
+
+[tool.bumpver]
+commit = true
+commit_message = ":bookmark: bump version {old_version} -> {new_version}"
+current_version = "2026.1.1"
+push = false  # disabled for GitHub Actions
+tag = true
+version_pattern = "YYYY.MM.INC1"
+
+[tool.uv]
+package = false
+
+[tool.bumpver.file_patterns]
+"config/__init__.py" = [
+    '__version__ = "{version}"',
+]
+"pyproject.toml" = [
+  'version = "{version}"'
 ]
 
 [tool.coverage.run]
@@ -47,6 +71,14 @@ DJANGO_SETTINGS_MODULE = "config.settings"
 addopts = "--nomigrations --reuse-db"
 norecursedirs = ".git* frontend media static templates"
 python_files = "test_*.py"
+
+[tool.basedpyright]
+# typeCheckingMode = "standard"
+
+# kill the Django-unsafe ones
+reportUnannotatedClassAttribute = "none"
+reportIncompatibleVariableOverride = "none"
+reportImplicitOverride = "none"
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.

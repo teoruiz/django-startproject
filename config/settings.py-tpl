@@ -35,6 +35,15 @@ CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
 # Application definition
 
 INSTALLED_APPS = [
+    "unfold",
+    "unfold.contrib.filters",  # optional, if special filters are needed
+    "unfold.contrib.forms",  # optional, if special form elements are needed
+    "unfold.contrib.inlines",  # optional, if special inlines are needed
+    # "unfold.contrib.import_export",  # optional, if django-import-export package is used
+    # "unfold.contrib.location_field",  # optional, if django-location-field package is used
+]
+
+INSTALLED_APPS += [
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -46,8 +55,18 @@ INSTALLED_APPS = [
 
 # Third-party apps
 
-INSTALLED_APPS += ["django_prodserver", "django_extensions", "django_htmx", "django_tailwind_cli"]
-
+INSTALLED_APPS += [
+    "django_extensions",
+    "django_htmx",
+    "django_prodserver",
+    "django_q",
+    "django_tailwind_cli",
+    "health_check",
+    "health_check.cache",
+    "health_check.contrib.migrations",
+    "health_check.db",
+    "health_check.storage",
+]
 # Our apps
 
 INSTALLED_APPS += ["core"]
@@ -68,6 +87,9 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django_htmx.middleware.HtmxMiddleware",
 ]
+
+if DEBUG:
+    MIDDLEWARE += ["django_browser_reload.middleware.BrowserReloadMiddleware"]
 
 ROOT_URLCONF = "config.urls"
 
@@ -163,15 +185,102 @@ ADMIN_URL = env.str("ADMIN_URL", default="admin/")
 
 SITE_ID = 1
 
+
+# Tailwind CSS settings
+TAILWIND_CLI_SRC_REPO = env.str("TAILWIND_CLI_SRC_REPO", default="dobicinaitis/tailwind-cli-extra")
+TAILWIND_CLI_ASSET_NAME = env.str("TAILWIND_CLI_ASSET_NAME", default="tailwindcss-extra")
+TAILWIND_CLI_USE_DAISY_UI = env.bool("TAILWIND_CLI_USE_DAISY_UI", default=True)
+
+TAILWIND_CLI_AUTOMATIC_DOWNLOAD = env.bool("TAILWIND_CLI_AUTOMATIC_DOWNLOAD", default=True)
+TAILWIND_CLI_DIST_CSS = env.str("TAILWIND_CLI_DIST_CSS", default="css/tailwind.css")
+TAILWIND_CLI_SRC_CSS = env.str("TAILWIND_CLI_SRC_CSS", default="frontend/index.css")
+
+# Django Prodserver settings
+
 PRODUCTION_PROCESSES = {
     "web": {
         "BACKEND": "django_prodserver.backends.gunicorn.GunicornServer",
         "ARGS": {"bind": "0.0.0.0:8000", "workers": "2"},
-    }
+    },
+    "worker": {
+        "BACKEND": "django_prodserver.backends.django_q2.DjangoQ2Worker",
+        "ARGS": {},
+    },
 }
 
-# Tailwind CLI
-TAILWIND_CLI_SRC_REPO = "dobicinaitis/tailwind-cli-extra"
-TAILWIND_CLI_ASSET_NAME = "tailwindcss-extra"
-TAILWIND_CLI_USE_DAISY_UI = True
-TAILWIND_CLI_SRC_CSS = "frontend/css/source.css"
+# Django-Q2 settings
+
+Q_CLUSTER = {
+    "bulk": 10,
+    "max_attempts": 1,
+    "name": "{{ project_name }}",
+    "orm": "default",
+    "queue_limit": 50,
+    "recycle": 500,
+    "retry": 120,
+    "timeout": 60,
+    "workers": 2,
+}
+
+# Django Prodserver settings
+# Logging Configuration
+# Docker-friendly: all logs go to stdout/stderr for container log aggregation
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "[{levelname}] {asctime} {name} {module}.{funcName}: {message}",
+            "style": "{",
+        },
+        "simple": {
+            "format": "[{levelname}] {name}: {message}",
+            "style": "{",
+        },
+    },
+    "filters": {
+        "require_debug_true": {
+            "()": "django.utils.log.RequireDebugTrue",
+        },
+    },
+    "handlers": {
+        "console": {
+            "level": "INFO",
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+        "console_debug": {
+            "level": "DEBUG",
+            "filters": ["require_debug_true"],
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+    },
+    "loggers": {
+        # Django's default loggers
+        "django": {
+            "handlers": ["console"],
+            "level": "INFO",
+        },
+        "django.request": {
+            "handlers": ["console"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+        # Our application loggers
+        "core.managers": {
+            "handlers": ["console_debug"],
+            "level": "DEBUG" if DEBUG else "INFO",
+            "propagate": False,
+        },
+        "core.models": {
+            "handlers": ["console_debug"],
+            "level": "DEBUG" if DEBUG else "INFO",
+            "propagate": False,
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "INFO",
+    },
+}
