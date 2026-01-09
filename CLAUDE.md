@@ -187,7 +187,7 @@ class MyModel(TimeStampedModel):
 - Line length: 120 characters
 
 ## Django Admin with Unfold
- 
+
 This project uses **Django Unfold** for a modern admin interface.
 
 **Setup:**

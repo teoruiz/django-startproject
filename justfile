@@ -14,6 +14,9 @@ bootstrap *ARGS:
         echo ".env created"
     fi
 
+    # Pre-create volume mount directories to avoid Docker creating them as root
+    mkdir -p .venv .django_tailwind_cli
+
     if [ -n "${VIRTUAL_ENV-}" ]; then
         python -m pip install --upgrade pip uv
     else
