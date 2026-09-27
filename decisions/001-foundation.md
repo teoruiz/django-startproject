@@ -5,7 +5,7 @@ React owns product presentation. Ninja OpenAPI generates business API TypeScript
 Allauth owns authentication; its installed OpenAPI schema generates a separate authentication client type file.
 Browser clients use session cookies and CSRF through same-origin `/api` paths. No tokens are stored in localStorage.
 A small custom Django user model permits future identity changes without replacing AUTH_USER_MODEL after deployment.
-Email is unique and used for sign-in; usernames remain available for Django admin compatibility.
+Email is the only identifier: it is unique, used for sign-in, admin and `createsuperuser`. There is no username.
 
 Native `django.tasks` is the only application-facing task API. ImmediateBackend runs synchronously for development
 and tests and provides no durable queue. Before relying on background execution in production, choose a backend

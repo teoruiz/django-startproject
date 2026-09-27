@@ -11,7 +11,7 @@ PASSWORD = "test-password-8492"
 
 @pytest.fixture
 def user():
-    user = baker.make(User, email="member@example.test", username="member", first_name="Ada", last_name="Lovelace")
+    user = baker.make(User, email="member@example.test", first_name="Ada", last_name="Lovelace")
     user.set_password(PASSWORD)
     user.save()
     return user
@@ -122,3 +122,22 @@ def test_login_email_is_case_insensitive(browser, user):
 def test_email_uniqueness_is_enforced_case_insensitively(user):
     with pytest.raises(IntegrityError), transaction.atomic():
         baker.make(User, email="MEMBER@example.test")
+
+
+def test_superuser_is_created_by_email_without_username():
+    admin = User.objects.create_superuser(email="admin@example.test", password=PASSWORD)
+    assert admin.is_staff and admin.is_superuser
+    assert User.USERNAME_FIELD == "email"
+    assert "username" not in {field.name for field in User._meta.get_fields()}
+
+
+def test_admin_creates_users_by_email(client):
+    client.force_login(User.objects.create_superuser(email="admin@example.test", password=PASSWORD))
+    assert client.get("/admin/core/user/").status_code == 200
+    response = client.post(
+        "/admin/core/user/add/",
+        {"email": "staff-made@example.test", "password1": PASSWORD, "password2": PASSWORD},
+    )
+    assert response.status_code == 302
+    created = User.objects.get(email="staff-made@example.test")
+    assert client.get(f"/admin/core/user/{created.pk}/change/").status_code == 200

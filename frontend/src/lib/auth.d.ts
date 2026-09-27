@@ -1538,11 +1538,6 @@ export interface components {
              * @example 123
              */
             id?: number;
-            /**
-             * @description The username.
-             * @example wizard
-             */
-            username: string;
         };
         /** @description Configuration of the Django `allauth.usersessions` app. */
         UserSessionsConfiguration: {

@@ -42,5 +42,5 @@ def me(request: HttpRequest) -> UserSchema:
 @api.post("/tasks/welcome", response=TaskSchema, operation_id="enqueueWelcome")
 def enqueue_welcome(request: HttpRequest) -> TaskSchema:
     assert isinstance(request.user, User)
-    result = welcome_message.enqueue(request.user.email)
+    result = welcome_message.enqueue(request.user.get_full_name() or request.user.email)
     return TaskSchema(task_id=result.id)
