@@ -11,6 +11,11 @@ class UserManager(BaseUserManager["User"]):
 
     use_in_migrations = True
 
+    @classmethod
+    def normalize_email(cls, email: str | None) -> str:
+        # Django lowercases only the domain; allauth matches the whole address in lowercase.
+        return super().normalize_email(email).strip().lower()
+
     def _create_user(self, email: str, password: str | None, **extra_fields: Any) -> "User":
         if not email:
             raise ValueError("Users must have an email address.")
@@ -49,6 +54,11 @@ class User(AbstractUser, TimeStampedModel):
         ordering = ["-created"]
         verbose_name = "user"
         verbose_name_plural = "users"
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        # clean() normalizes for forms; this also covers the manager, shell and fixtures.
+        self.email = UserManager.normalize_email(self.email)
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return self.email

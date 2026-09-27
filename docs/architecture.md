@@ -18,7 +18,8 @@ Ninja defaults to session authentication; explicitly public routes opt out indiv
 Session-authenticated writes enforce Django CSRF checks. Never disable CSRF to fix a proxy issue.
 
 Allauth handles email/password login and session lifecycle. A database constraint enforces
-case-insensitive uniqueness of the login email, including accounts created through admin. The React client retrieves a fresh CSRF
+case-insensitive uniqueness of the login email, including accounts created through admin.
+Every save stores the whole email in lowercase, because allauth matches login emails in lowercase. The React client retrieves a fresh CSRF
 token before writes because login rotates the secret. Cookies are HttpOnly for the session, SameSite=Lax,
 and Secure outside DEBUG. Vite preserves the browser Host header; development trusted origins are
 explicitly listed in `.env-dist`. No wildcard CORS, localStorage tokens or custom password endpoint exists.

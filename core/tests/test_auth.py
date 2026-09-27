@@ -141,3 +141,68 @@ def test_admin_creates_users_by_email(client):
     assert response.status_code == 302
     created = User.objects.get(email="staff-made@example.test")
     assert client.get(f"/admin/core/user/{created.pk}/change/").status_code == 200
+
+
+def login_as(browser, email):
+    return browser.post(
+        "/api/auth/browser/v1/auth/login",
+        {"email": email, "password": PASSWORD},
+        content_type="application/json",
+        **csrf(browser),
+    )
+
+
+@pytest.fixture
+def admin_client(client):
+    client.force_login(User.objects.create_superuser(email="admin@example.test", password=PASSWORD))
+    return client
+
+
+@pytest.mark.parametrize("submitted", ["Mixed.Case@Example.Test", "mixed.case@example.test"])
+def test_manager_created_mixed_case_email_can_log_in(browser, submitted):
+    user = User.objects.create_user(email="Mixed.Case@Example.Test", password=PASSWORD)
+    assert user.email == "mixed.case@example.test"
+    assert login_as(browser, submitted).status_code == 200
+    assert browser.get("/api/me").json()["id"] == user.pk
+
+
+@pytest.mark.parametrize("submitted", ["Staff.Made@Example.Test", "staff.made@example.test"])
+def test_admin_created_mixed_case_email_can_log_in(admin_client, browser, submitted):
+    response = admin_client.post(
+        "/admin/core/user/add/",
+        {"email": "Staff.Made@Example.Test", "password1": PASSWORD, "password2": PASSWORD},
+    )
+    assert response.status_code == 302
+    user = User.objects.get(email="staff.made@example.test")
+    assert login_as(browser, submitted).status_code == 200
+    assert browser.get("/api/me").json()["id"] == user.pk
+
+
+def test_admin_email_edit_is_normalized(admin_client, browser, user):
+    response = admin_client.post(
+        f"/admin/core/user/{user.pk}/change/",
+        {
+            "email": "Renamed@Example.Test",
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "is_active": "on",
+            "last_login_0": "",
+            "last_login_1": "",
+            "date_joined_0": user.date_joined.strftime("%Y-%m-%d"),
+            "date_joined_1": user.date_joined.strftime("%H:%M:%S"),
+        },
+    )
+    assert response.status_code == 302, response.context["adminform"].form.errors
+    user.refresh_from_db()
+    assert user.email == "renamed@example.test"
+    assert login_as(browser, "Renamed@Example.Test").status_code == 200
+
+
+def test_admin_rejects_email_differing_only_by_case(admin_client, user):
+    response = admin_client.post(
+        "/admin/core/user/add/",
+        {"email": "MEMBER@Example.Test", "password1": PASSWORD, "password2": PASSWORD},
+    )
+    assert response.status_code == 200
+    assert "email" in response.context["adminform"].form.errors
+    assert User.objects.filter(email__iexact="member@example.test").count() == 1
