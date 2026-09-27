@@ -1,81 +1,58 @@
-x-common-settings:
-  &common-settings # Set UID/GID in .env if your user is not 1000 (e.g., macOS uses 501)
-  build:
-    context: .
-    dockerfile: Dockerfile
-    target: dev
-    args:
-      UID: "${UID:-1000}"
-      GID: "${GID:-1000}"
-  depends_on:
-    db:
-      condition: service_healthy
-  environment:
-    - "ALLOWED_HOSTS=*"
-    - "DATABASE_URL=postgres://postgres@db/postgres"
-    - "DJANGO_DEBUG=true"
-    - "UV_CACHE_DIR=/cache/uv"
-  env_file: .env
-  tty: true
-  volumes:
-    - .:/src:cache
-    - venv:/src/.venv
-    - uvcache:/cache/uv
-    - django-tailwind-cli-data:/src/.django_tailwind_cli
-
 services:
   db:
+    image: postgres:17-bookworm
     environment:
-      - "POSTGRES_HOST_AUTH_METHOD=trust"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready", "-d", "postgres"]
-      interval: 10s
-      timeout: 0.5s
-      retries: 3
-    image: "pgautoupgrade/pgautoupgrade:17-alpine"
-    init: true
-    user: postgres
+      POSTGRES_DB: app
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
     volumes:
-      - .:/src:cache
-      - postgres-data:/var/lib/postgresql/data/
-
-  worker:
-    <<: *common-settings
-    command: ["/src/start-worker.sh"]
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "./healthcheck-worker.sh"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    init: true
-
-  utility:
-    <<: *common-settings
-    command: ["uv", "run", "-m", "manage", "--version"]
-    entrypoint: ["/src/compose-entrypoint.sh"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d app"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
 
   web:
-    <<: *common-settings
-    command: ["/src/start-dev.sh"]
-    healthcheck:
-      test: ["CMD-SHELL", "./healthcheck-web.sh"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    init: true
+    build:
+      context: .
+      target: dev
+    env_file: .env
+    volumes:
+      - .:/app
     ports:
-      - "8000:8000"
-    tty: true
-
-  tailwind:
-    <<: *common-settings
-    command: ["/src/start-tailwind.sh"]
+      - "127.0.0.1:${WEB_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
     init: true
+    healthcheck:
+      test: ["CMD", "sh", "healthcheck-web.sh"]
+      interval: 3s
+      timeout: 5s
+      start_period: 10s
+      retries: 20
+
+  frontend:
+    build: ./frontend
+    environment:
+      DJANGO_PROXY_TARGET: http://web:8000
+    volumes:
+      - ./frontend:/app
+      - frontend-modules:/app/node_modules
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-5173}:5173"
+    depends_on:
+      web:
+        condition: service_healthy
+    init: true
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:5173').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 3s
+      timeout: 5s
+      start_period: 10s
+      retries: 20
 
 volumes:
   postgres-data:
-  django-tailwind-cli-data:
-  venv:
-  uvcache:
+  frontend-modules:

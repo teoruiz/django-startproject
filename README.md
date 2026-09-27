@@ -1,192 +1,122 @@
-<h1 align="center">Welcome to django-startproject 👋</h1>
-<p>
-  <a href="https://github.com/teoruiz/django-startproject/actions" target="_blank">
-    <img alt="CI" src="https://github.com/teoruiz/django-startproject/workflows/CI/badge.svg" />
-  </a>
-</p>
+# Django product starter
 
-> Django startproject template with batteries
->
-> Forked from [jefftriplett/django-startproject](https://github.com/jefftriplett/django-startproject) with modern frontend tooling and API support
+A Django `startproject --template` foundation for agent-driven product work.
+The **generated project** is the artifact, and CI validates it from the local working copy.
 
-## :triangular_flag_on_post: Core Features
+Django 6.1 / Python 3.13 owns the domain, PostgreSQL, authorization and tasks. React,
+TypeScript and Vite own product presentation. The UI uses Tailwind v4, shadcn/ui,
+React Router and TanStack Query. Dependencies are locked with uv and pnpm.
 
-- Django 5.2
-- Python 3.13
-- Docker Compose (I prefer Orbstack)
-- Justfile recipes
-- Postgres auto updates
-- uv support
-- pre-commit support via prek
+## Generate and run
 
-## :triangular_flag_on_post: Django Features
+Install Docker with Compose, uv, Just, Node 22.12+ and pnpm 10.28.1. Generate with Django's standard command:
 
-- django-click
-- django-prodserver
-- django-ninja (REST API framework)
-- django-htmx (dynamic interactions)
-- django-storages
-- django-extensions
-- django-tailwind-cli (with django-extensions support)
-- environs[django]
-- psycopg[binary]
-- whitenoise
-- httpx
-- uvicorn
-
-## :art: Frontend
-
-- Tailwind CSS v4 (CSS-first configuration)
-- DaisyUI (component library)
-- HTMX (dynamic interactions)
-- Dark mode support
-
-## :shirt: Linting/auto-formatting
-
-- pre-commit (using prek)
-  - Standard hooks (check-added-large-files, check-json, check-toml, check-yaml, etc.)
-  - ruff (linting and formatting)
-  - djlint (Django template linting)
-  - pyupgrade (Python 3.13+)
-  - django-upgrade (Django 5.0+)
-  - djhtml (Django template formatting)
-  - djade (Django 5.2 compatibility)
-  - blacken-docs (format code in documentation)
-
-## :green_heart: Testing
-
-- django-test-plus
-- django-browser-reload (dev)
-- model-bakery
-- pytest
-- pytest-django
-
-## 📚 Additional Features
-
-- Multi-stage Docker build (dev/release)
-- CLAUDE.md included for AI-assisted development
-- llms.txt for LLM context
-- Base templates with Tailwind CSS v4
-- Django Ninja API (`/api/hello` example endpoint)
-
-### 🏠 [Homepage](https://github.com/teoruiz/django-startproject)
-### 🔗 [Original Project](https://github.com/jefftriplett/django-startproject)
-
-## :wrench: Install
-
-```shell
-$ uv run --with=django django-admin startproject \
-    --extension=ini,py,toml,yaml,yml \
-    --template=https://github.com/teoruiz/django-startproject/archive/main.zip \
-    example_project
-
-$ cd example_project
-
-$ just bootstrap
+```sh
+uv run --no-project --with django==6.1.1 django-admin startproject \
+    --template=https://github.com/teoruiz/django-startproject/archive/refs/heads/main.zip \
+    --extension=py --exclude=.git \
+    my_product
+cd my_product
+just bootstrap
+just up
 ```
 
-## :rocket: Usage
+For a clean local checkout, replace the template URL with its absolute directory path.
+`--extension=py` renders only Python; frontend, Just and GitHub Actions expressions stay intact.
+The explicit `--exclude=.git` keeps the `.github` workflow directory, which Django otherwise skips
+with other hidden directories. No Git repository is created automatically.
 
-```shell
-# Bootstrap our project
-$ just bootstrap
+Use an archive or a clean checkout for normal generation: Django copies local files, including
+`.env` and installed dependencies. For testing changes from a working checkout, `just template-test`
+handles secret/cache filtering internally and then invokes the same Django command.
 
-# Build our Docker Image
-$ just build
+Bootstrap copies `.env-dist` if needed, installs locked dependencies, builds the development
+images, starts PostgreSQL and applies migrations. It never upgrades dependencies or resets data.
+Compose starts exactly three services: PostgreSQL 17, Django and Vite. Database data is retained
+by `just down`; do not remove volumes unless you intend to erase that project's database.
 
-# Run Migrations
-$ just manage migrate
+Open **http://localhost:5173**. Vite proxies relative `/api/...` calls to Django at port 8000.
+Django admin is at **http://localhost:8000/admin/** and Ninja docs at **http://localhost:8000/api/docs**.
+Create your first account in a second terminal:
 
-# Create a Superuser in Django
-$ just manage createsuperuser
-
-# Run Django on http://localhost:8000/
-$ just up
-
-# Run Django in background mode
-$ just start
-
-# Stop all running containers
-$ just down
-
-# Open a bash shell/console
-$ just console
-
-# Run Tests
-$ just test
-
-# Lint the project / run pre-commit by hand
-$ just lint
-
-# Lock dependencies with uv
-$ just lock
+```sh
+just manage createsuperuser
 ```
 
-## `just` Commands
+Use that account's **email and password** on the React Account page. It signs in through
+allauth Headless and renders the typed response from authenticated `/api/me`.
+The starter deliberately has no shared default credentials and public signup is closed.
+Create ordinary users through Django admin. These are administrator-created accounts: users can sign in
+and out, but cannot yet register themselves, reset a forgotten password or verify their email through React.
+See [authentication and deployment details](docs/architecture.md).
 
-```shell
-$ just --list
+## Daily commands
+
+```sh
+just test                 # pytest against Compose PostgreSQL (bootstrap first)
+just lint                 # Ruff and frontend ESLint/Prettier checks
+just typecheck            # basedpyright + TypeScript
+just frontend-build       # frontend/dist, no hosting assumption
+just api-generate         # export installed schemas and regenerate TypeScript
+just api-check            # fail if generated contracts have drifted
+just check                # lint, types, contracts, build and PostgreSQL tests
+just manage makemigrations
+just manage migrate
+just logs -f
+just down
 ```
-<!-- [[[cog
-import subprocess
-import cog
 
-list = subprocess.run(['just', '--list'], stdout=subprocess.PIPE)
-cog.out(
-    f"```\n{list.stdout.decode('utf-8')}```"
-)
-]]] -->
+Use `uv add` / `uv remove` and `pnpm --dir frontend add` / `remove` for dependencies.
+Commit `uv.lock` and `frontend/pnpm-lock.yaml`. After changing Python dependencies run `just build`;
+restart the frontend after dependency changes. `just upgrade` is an explicit dependency update.
+`just format` fixes formatting. Optional Git hooks: `uv run pre-commit install`.
+The pyproject's `django-product` name is package metadata, independent of the generated directory name.
+
+The checked-in TypeScript contracts come from Ninja and installed allauth OpenAPI schemas, never
+handwritten copies. Export does not need a running server or database. Commit regenerated `api.d.ts`
+and `auth.d.ts` after API/settings/dependency changes. The client uses openapi-fetch and relative URLs.
+
+## Validate the template
+
+Run these **in the template checkout**, not in a generated application:
+
+```sh
+just template-test             # fresh temporary project, SQLite; no external services
+just template-test compose     # fresh project, full PostgreSQL/Compose setup and release-image build
 ```
-Available recipes:
-    bootstrap *ARGS           # Initialize project with dependencies and environment
-    build *ARGS               # Build Docker containers with optional args
-    console                   # Open interactive bash console in utility container
-    down *ARGS                # Stop and remove containers, networks
-    lint *ARGS                # Run pre-commit hooks on all files
-    lint-autoupdate *ARGS     # Update pre-commit hooks to latest versions
-    lock *ARGS                # Lock dependencies with uv
-    logs *ARGS                # Show logs from containers
-    manage *ARGS              # Run Django management commands
-    pg_dump file='db.dump'    # Dump database to file
-    pg_restore file='db.dump' # Restore database dump from file
-    restart *ARGS             # Restart containers
-    run *ARGS                 # Run command in utility container
-    start *ARGS="--detach"    # Start services in detached mode by default
-    stop *ARGS                # Stop services (alias for down)
-    tail                      # Show and follow logs
-    test *ARGS                # Run pytest with arguments
-    up *ARGS                  # Start containers
-    upgrade                   # Upgrade dependencies and lock
+
+Both paths install locked dependencies, check Django, apply migrations, test auth/CSRF/tasks,
+check migration drift, lint, typecheck, verify generated contracts and build the frontend.
+Temporary files are removed on exit. The Compose path also removes only its own disposable
+containers and volumes. SQLite is only for fast validation; PostgreSQL is the application target.
+Ports 8000 and 5173 must be free for Compose validation.
+
+For browser verification or debugging, retain the disposable project and services:
+
+```sh
+TEMPLATE_KEEP=1 just template-test compose
+# Use the printed path, then provision an account with just manage createsuperuser.
+# Follow docs/verification.md; when finished, use the printed cleanup command.
 ```
-<!-- [[[end]]] -->
 
-## Authors
+CI uses the same validation recipes. Its workflow also works after generation, when it runs the
+application's checks directly. It never pushes commits, tags or deployment branches.
 
-👤 **Teo Ruiz** (Fork maintainer)
+## Structure and boundaries
 
-* GitHub: [@teoruiz](https://github.com/teoruiz)
+- `core/`: Django user, admin, Ninja schemas/endpoints, native Tasks example, tests.
+- `config/`: Django settings/URLs (Python templates until generation).
+- `frontend/`: independent Vite application; `src/components/ui/` holds shadcn source.
+- `docs/`, `domains/`, `ux/`, `decisions/`: engineering, domain, UX and architecture notes.
+- `AGENTS.md`: concise agent workflow; `CLAUDE.md` points to the same instructions.
+- `Dockerfile`: backend dev/release stages. WhiteNoise serves admin static files in release.
 
-👤 **Jeff Triplett** (Original author)
+Paper is the visual design workspace. UI work is verified in the real application with agent-browser.
+Playwright is not included; persistent tests can be added later for regression-critical flows.
 
-* Website: https://jefftriplett.com
-* Micro Blog: https://micro.webology.dev
-* Mastodon: [@webology@mastodon.social](https://mastodon.social/@webology)
-* Xwitter: [@webology](https://twitter.com/webology)
-* GitHub: [@jefftriplett](https://github.com/jefftriplett)
-* Hire me: [revsys](https://www.revsys.com)
+Production frontend hosting, signup/recovery/verification UX and a durable Django Tasks backend
+are deliberately deferred. ImmediateBackend runs synchronously; it is not a production queue.
+No Supabase, Go, Celery, Redis or RabbitMQ is included. See [foundation decisions](decisions/001-foundation.md).
 
-## 🌟 Community Projects
-
-* [Django News Newsletter](https://django-news.com)
-* [Django News Jobs](https://jobs.django-news.com)
-* [Django Packages](https://djangopackages.org)
-* [DjangoCon US](https://djangocon.us)
-* [Awesome Django](https://awesomedjango.org)
-
-## 🤝 Contributing
-
-Contributions, issues and feature requests are welcome!<br />Feel free to check [issues page](https://github.com/teoruiz/django-startproject/issues).
-
-## Show your support
-
-Give a ⭐️ if this project helped you!
+Based on [Jeff Triplett's Django starter](https://github.com/jefftriplett/django-startproject),
+maintained by [Teo Ruiz](https://github.com/teoruiz).

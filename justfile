@@ -1,169 +1,75 @@
 set dotenv-load := false
 
-# Show list of available commands
-@_default:
+@default:
     just --list
 
-# Initialize project with dependencies and environment
-bootstrap *ARGS:
+# Install locked dependencies, build development images and migrate PostgreSQL.
+bootstrap:
     #!/usr/bin/env bash
     set -euo pipefail
+    test -f manage.py || { echo "Generate a project first; see README.md."; exit 1; }
+    test -f .env || cp .env-dist .env
+    uv sync --locked
+    pnpm --dir frontend install --frozen-lockfile
+    docker compose build
+    docker compose up -d --wait db
+    just manage migrate --noinput
 
-    if [ ! -f ".env" ]; then
-        cp .env-dist .env
-        echo ".env created"
-    fi
+up *args:
+    docker compose up {{args}}
 
-    # Pre-create volume mount directories to avoid Docker creating them as root
-    mkdir -p .venv .django_tailwind_cli
+down:
+    docker compose down
 
-    if [ -n "${VIRTUAL_ENV-}" ]; then
-        python -m pip install --upgrade pip uv
-    else
-        echo "Skipping pip steps as VIRTUAL_ENV is not set"
-    fi
+build:
+    docker compose build
 
-    if [ ! -f "uv.lock" ]; then
-        just lock
-        echo "uv.lock created"
-    fi
+manage *args:
+    docker compose run --rm --no-deps web python manage.py {{args}}
 
-    just upgrade
+console:
+    docker compose run --rm --no-deps web bash
 
-    if [ -f "compose.yml" ]; then
-        just build {{ ARGS }} --pull
-    fi
+logs *args:
+    docker compose logs {{args}}
 
-# Build Docker containers with optional args
-@build *ARGS:
-    docker compose build {{ ARGS }}
+test *args:
+    docker compose run --rm --no-deps web pytest {{args}}
 
-# Open interactive bash console in utility container
-@console:
-    docker compose run \
-        --no-deps \
-        --rm \
-        utility /bin/bash
+lint:
+    uv run --locked ruff check .
+    uv run --locked ruff format --check .
+    pnpm --dir frontend lint
 
-# Open interactive bash console in database container
-@console-db:
-    docker compose run \
-        --no-deps \
-        --rm \
-        db /bin/bash
+format:
+    uv run --locked ruff check --fix .
+    uv run --locked ruff format .
+    pnpm --dir frontend format
 
-# Stop and remove containers, networks
-@down *ARGS:
-    docker compose down {{ ARGS }}
+typecheck:
+    uv run --locked basedpyright
+    pnpm --dir frontend typecheck
 
-# Format justfile with unstable formatter
-[private]
-@fmt:
-    just --fmt --unstable
+frontend-build:
+    pnpm --dir frontend build
 
-# Run pre-commit hooks on all files
-@lint *ARGS:
-    uv --quiet tool run prek {{ ARGS }} --all-files
+# Schema export is database-independent; no application server is needed.
+api-generate:
+    uv run --locked python manage.py export_api
+    pnpm --dir frontend api:generate
 
-# Update pre-commit hooks to latest versions
-@lint-autoupdate *ARGS:
-    uv --quiet tool run prek autoupdate
+api-check:
+    uv run --locked python manage.py export_api
+    pnpm --dir frontend api:check
 
-# Lock dependencies with uv
-@lock *ARGS:
-    uv lock {{ ARGS }}
+check: lint typecheck api-check frontend-build test
 
-# Show logs from containers
-@logs *ARGS:
-    docker compose logs {{ ARGS }}
+# Explicit upgrades only; bootstrap never changes locks.
+upgrade:
+    uv lock --upgrade
+    uv sync --locked
+    pnpm --dir frontend update
 
-# Create Django database migration files
-@makemigrations *ARGS:
-    just manage makemigrations {{ ARGS }}
-
-# Run Django management commands
-@manage *ARGS:
-    docker compose run \
-        --no-deps \
-        --rm \
-        utility \
-            uv run -m manage {{ ARGS }}
-
-# Apply Django database migrations
-@migrate *ARGS:
-    just manage migrate {{ ARGS }}
-
-# Dump database to file
-@pg_dump file='db.dump':
-    docker compose run \
-        --no-deps \
-        --rm \
-        db pg_dump \
-            --dbname "${DATABASE_URL:=postgres://postgres@db/postgres}" \
-            --file /src/{{ file }} \
-            --format=c \
-            --verbose
-
-# Restore database dump from file
-@pg_restore file='db.dump':
-    docker compose run \
-        --no-deps \
-        --rm \
-        db pg_restore \
-            --clean \
-            --dbname "${DATABASE_URL:=postgres://postgres@db/postgres}" \
-            --if-exists \
-            --no-owner \
-            --verbose \
-            /src/{{ file }}
-
-# Pull Docker images
-@pull *ARGS:
-    docker compose pull {{ ARGS }}
-
-# Restart containers
-@restart *ARGS:
-    docker compose restart {{ ARGS }}
-
-# Run command in utility container
-@run *ARGS:
-    docker compose run \
-        --no-deps \
-        --rm \
-        utility {{ ARGS }}
-
-# Start services in detached mode by default
-@start *ARGS="--detach":
-    just up {{ ARGS }}
-
-# Stop services
-@stop *ARGS:
-    docker compose stop {{ ARGS }}
-
-# Show and follow logs
-@tail:
-    just logs --follow
-
-# Run pytest with arguments
-@test *ARGS:
-    docker compose run \
-        --no-deps \
-        --rm \
-        utility uv run pytest {{ ARGS }}
-
-# Start containers with file watching
-@up *ARGS:
-    docker compose up {{ ARGS }}
-
-# Update dependencies and pre-commit hooks
-@update:
-    just upgrade
-    just lint-autoupdate
-
-# Upgrade dependencies and lock
-@upgrade:
-    just lock --upgrade
-
-# Watch for file changes and rebuild Docker services
-@watch *ARGS:
-    docker compose watch {{ ARGS }}
+# In the template checkout, generate and validate a disposable artifact.
+template-test mode="sqlite":
+    bash scripts/template-test.sh {{mode}}

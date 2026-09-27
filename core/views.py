@@ -1,5 +1,14 @@
-from django.views.generic import TemplateView
+from django.db import connection
+from django.db.utils import DatabaseError
+from django.http import HttpRequest, JsonResponse
+from django.views.decorators.http import require_GET
 
 
-class HomeView(TemplateView):
-    template_name = "core/home.html"
+@require_GET
+def health(request: HttpRequest) -> JsonResponse:
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+    except DatabaseError:
+        return JsonResponse({"status": "unavailable"}, status=503)
+    return JsonResponse({"status": "ok"})

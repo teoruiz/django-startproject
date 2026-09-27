@@ -1,2 +1,3 @@
 #!/bin/sh
-uv run -m manage devserver --skip-checks 0.0.0.0:8000
+set -eu
+exec python manage.py runserver 0.0.0.0:8000
