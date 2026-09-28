@@ -1,12 +1,14 @@
 from django.contrib import admin
-from django.urls import include, path
+from django.urls import include, path, re_path
 
 from core.api import api
-from core.views import health
+from core.views import frontend, health
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/auth/", include("allauth.headless.urls")),
     path("api/", api.urls),
     path("health/", health, name="health"),
+    # Last: other paths are client-side routes. Backend, static and asset prefixes never fall back to the SPA.
+    re_path(r"^(?!(?:admin|api|assets|health|media|static)(?:/|$))", frontend, name="frontend"),
 ]

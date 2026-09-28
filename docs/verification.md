@@ -31,8 +31,40 @@ Verify these acceptance criteria:
 
 Close the browser session, press Ctrl-C in the `just up` terminal (or run `just stop`) and run the printed
 disposable cleanup command when finished.
+
+## Production image
+
+For changes to the release image, settings, routing or static/frontend serving, repeat the checks above against the
+running image. In a generated project, `RELEASE_KEEP=1 just release-check` leaves the image running with DEBUG=false and
+disposable PostgreSQL, and prints its URL, a validation account and the cleanup command. (`TEMPLATE_KEEP=1 just
+template-test compose` does the same for a fresh project.) Also verify:
+
+1. Client-side navigation, and direct navigation and refresh on `/account` and an unknown route.
+2. Login, `/api/me` rendering and logout on the same origin; session and CSRF cookies are `Secure`.
+3. The task example from the signed-in page, e.g.
+   `agent-browser eval 'fetch("/api/csrf").then(r => r.json()).then(({csrf_token}) => fetch("/api/tasks/welcome", {method: "POST", headers: {"X-CSRFToken": csrf_token}})).then(r => r.status)'`.
+4. `/admin/` renders with its styles; no failed `/assets/` or `/static/` requests; no console or runtime errors.
 Do not add Playwright dependencies just to run this manual verification. Persistent browser tests
 are a separate product decision for important regression-critical flows.
+
+## Production frontend hosting validation record — 2026-09-28
+
+Validated fresh artifacts generated from the local working template after adding the SPA to the release image:
+
+- `just template-test`: SQLite path without a frontend build before checks/tests; checks, migrations/drift, 45 pytest
+  tests (including 24 routing/fallback/method/cache-header cases), lint, basedpyright, TypeScript, contracts and build.
+- `just template-test compose`: the existing host-development checks, then `just release-check`. It built the image
+  and verified the runtime has no Node, pnpm, `node_modules`, frontend sources or dev packages. It ran the image with
+  DEBUG=false and test-only secrets against disposable PostgreSQL 17, with migrations and the account created by
+  one-off containers. The HTTP smoke passed: SPA routes, HEAD and 405, gzip immutable `/assets/` and admin `/static/`,
+  404 for missing assets/static/API/media and non-HTML requests, `no-cache` entry page, `no-store` API, `Secure`
+  cookies, login/CSRF, `/api/me`, the task example and logout. Its containers, network and image were removed.
+- agent-browser against the running production image (Gunicorn, DEBUG=false, ImmediateBackend selected explicitly):
+  home render, client-side navigation to Account, direct `/account` and refresh, an unknown route showing Page not
+  found, invalid then valid login and `/api/me` rendering, refresh preserving the session, `Secure`/`HttpOnly`/`Lax`
+  cookies, task enqueue from the page (200 with CSRF, 403 without), styled Unfold admin with 200 for all static
+  requests, sign-out and 401 afterwards. No failed asset requests, console messages or page errors.
+- Not validated: a TLS proxy, a real hosting platform, or behavior across a rolling deployment.
 
 ## Host development validation record — 2026-09-28
 

@@ -35,6 +35,7 @@ jobs:
             just manage check
             just manage makemigrations --check --dry-run
             just check
+            just release-check
           else
             export DATABASE_URL=sqlite:///ci.sqlite3 DJANGO_DEBUG=true
             uv sync --locked

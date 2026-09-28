@@ -31,14 +31,13 @@ cleanup() {
             echo "Run servers: cd '$project_dir' && just up   # http://localhost:${FRONTEND_PORT:-}"
             echo "Validation account: smoke@example.com / smoke-password-123"
             echo "Cleanup: cd '$project_dir' && just stop; docker compose down --volumes --remove-orphans"
-            echo "Remove image: docker image rm $COMPOSE_PROJECT_NAME-release"
+            echo "The release check printed its own URL, account and cleanup command above."
         fi
         echo "Then remove '$validation_dir'."
         return
     fi
     if [[ "$mode" == compose && -f "$project_dir/.env" ]]; then
         (cd "$project_dir" && docker compose down --volumes --remove-orphans) || true
-        docker image rm "$COMPOSE_PROJECT_NAME-release" >/dev/null 2>&1 || true
     fi
     rm -rf "$validation_dir"
 }
@@ -134,30 +133,7 @@ assert_stopped() {
 start_group() { set -m; "$@" >>"$validation_dir/servers.log" 2>&1 & server_pgid=$!; set +m; }
 # Exercise the browser path: Vite proxy, allauth Headless session, CSRF, Ninja and the task example.
 proxy_smoke() {
-    uv run --locked python - "http://localhost:$FRONTEND_PORT" <<'PYTHON'
-import sys
-
-import httpx
-
-with httpx.Client(base_url=sys.argv[1]) as client:
-    assert client.get("/").status_code == 200
-    assert client.get("/api/me").status_code == 401
-    assert client.get("/api/auth/browser/v1/config").status_code == 200
-    login = {"email": "Smoke@Example.com", "password": "smoke-password-123"}
-    assert client.post("/api/auth/browser/v1/auth/login", json=login).status_code == 403  # no CSRF token
-    token = client.get("/api/csrf").json()["csrf_token"]
-    response = client.post("/api/auth/browser/v1/auth/login", json=login, headers={"X-CSRFToken": token})
-    assert response.status_code == 200, response.text
-    assert client.get("/api/me").json()["email"] == "smoke@example.com"
-    assert client.post("/api/tasks/welcome").status_code == 403  # rotated CSRF secret required
-    token = client.get("/api/csrf").json()["csrf_token"]
-    task = client.post("/api/tasks/welcome", headers={"X-CSRFToken": token})
-    assert task.status_code == 200 and task.json()["task_id"], task.text
-    logout = client.delete("/api/auth/browser/v1/auth/session", headers={"X-CSRFToken": token})
-    assert logout.status_code == 401
-    assert client.get("/api/me").status_code == 401
-print("Proxy, session, CSRF and task checks passed.")
-PYTHON
+    uv run --locked python scripts/smoke.py "http://localhost:$FRONTEND_PORT" Smoke@Example.com smoke-password-123
 }
 
 if [[ "$mode" == sqlite ]]; then
@@ -257,7 +233,8 @@ just typecheck
 just api-check
 just frontend-build
 if [[ "$mode" == compose ]]; then
-    docker build --target release -t "$COMPOSE_PROJECT_NAME-release" .
+    # Build and run the release image with DEBUG=false against its own disposable PostgreSQL.
+    RELEASE_KEEP=${TEMPLATE_KEEP:-0} just release-check
     if [[ "${TEMPLATE_KEEP:-0}" != 1 ]]; then
         just down
         [[ -z $(docker compose ps -q db) ]] || { echo "PostgreSQL still running after just down" >&2; exit 1; }

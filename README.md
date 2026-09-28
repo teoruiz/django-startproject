@@ -67,10 +67,11 @@ just manage <command>     # manage.py through uv, e.g. shell, createsuperuser
 just test                 # pytest against development PostgreSQL (starts it if needed)
 just lint                 # Ruff and frontend ESLint/Prettier checks
 just typecheck            # basedpyright + TypeScript
-just frontend-build       # frontend/dist, no hosting assumption
+just frontend-build       # Vite production build in frontend/dist
 just api-generate         # export installed schemas and regenerate TypeScript
 just api-check            # fail if generated contracts have drifted
 just check                # lint, types, contracts, build and PostgreSQL tests
+just release-check        # build the release image and run it with DEBUG=false (see below)
 just manage makemigrations
 just manage migrate
 ```
@@ -94,13 +95,28 @@ The checked-in TypeScript contracts come from Ninja and installed allauth OpenAP
 handwritten copies. Export does not need a running server or database. Commit regenerated `api.d.ts`
 and `auth.d.ts` after API/settings/dependency changes. The client uses openapi-fetch and relative URLs.
 
+## Production release
+
+One Docker image serves Django and the built React app from one origin: `/api/`, `/admin/` and `/health/` go to
+Django, WhiteNoise serves `/static/` and Vite's hashed `/assets/`, and other browser navigations load the SPA.
+Development is unchanged; the image is built only for releases.
+
+```sh
+docker build --target release -t my-product:VERSION .
+just release-check my-product:VERSION   # DEBUG=false, disposable PostgreSQL, HTTP/browser-path checks, cleanup
+```
+
+Without an argument, `just release-check` builds and removes a temporary image. Migrations run as a separate
+release step. The [production release guide](docs/deployment.md) covers required secrets, allowed hosts, HTTPS
+and proxy headers, caching across releases and what a deployment must still provide. No hosting vendor is chosen.
+
 ## Validate the template
 
 Run these **in the template checkout**, not in a generated application:
 
 ```sh
 just template-test             # fresh temporary project, SQLite; no external services
-just template-test compose     # fresh project, Docker PostgreSQL, host servers and release-image build
+just template-test compose     # fresh project, Docker PostgreSQL, host servers and the release image
 ```
 
 Both paths install locked dependencies, check Django, apply migrations, test auth/CSRF/tasks,
@@ -111,7 +127,8 @@ and that a paused supervisor retains its record until it resumes and handles the
 The Compose path runs the generated project's own `just bootstrap` and `just test` against Docker
 PostgreSQL, then starts the host servers with `just up` and checks login, CSRF, `/api/me` and the task
 example through the Vite proxy. It verifies that Ctrl-C, a crashing server and `just stop` all leave no
-server processes, that `just down` stops PostgreSQL, and builds the release image.
+server processes and that `just down` stops PostgreSQL. It then runs the project's `just release-check`
+(production mode against disposable PostgreSQL).
 It picks free ports; set `TEMPLATE_POSTGRES_PORT`, `TEMPLATE_DJANGO_PORT` or `TEMPLATE_FRONTEND_PORT`
 to choose them. Temporary files, its own container, volume and image are removed on exit.
 SQLite is only for fast validation; PostgreSQL is the application target.
@@ -120,7 +137,8 @@ For browser verification or debugging, retain the disposable project and service
 
 ```sh
 TEMPLATE_KEEP=1 just template-test compose
-# PostgreSQL keeps running; cd to the printed path and run just up on the printed ports.
+# PostgreSQL and the release container keep running; cd to the printed path and run just up
+# on the printed ports, or open the printed release URL for the production image.
 # Follow docs/verification.md; when finished, use the printed cleanup command.
 ```
 
@@ -136,13 +154,13 @@ application's checks directly. It never pushes commits, tags or deployment branc
 - `AGENTS.md`: application agent workflow, with a separate conditional section for template maintainers.
 - [Backend conventions](docs/backend-conventions.md): Django models, workflows, migrations, tests and Unfold admin.
 - `compose.yml`: development PostgreSQL only.
-- `Dockerfile`: backend production/release image. WhiteNoise serves admin static files in release.
+- `Dockerfile`: production release image with Django and the built React SPA; see [production release](docs/deployment.md).
 
 Paper is the visual design workspace. UI work is verified in the real application with agent-browser.
 Playwright is not included; persistent tests can be added later for regression-critical flows.
 
-Production frontend hosting, signup/recovery/verification UX and a durable Django Tasks backend
-are deliberately deferred. ImmediateBackend runs synchronously; it is not a production queue.
+Signup/recovery/verification UX, user-upload storage and a durable Django Tasks backend are deliberately
+deferred. ImmediateBackend runs synchronously; it is not a production queue.
 No Supabase, Go, Celery, Redis or RabbitMQ is included. See [foundation decisions](decisions/001-foundation.md).
 
 Based on [Jeff Triplett's Django starter](https://github.com/jefftriplett/django-startproject),

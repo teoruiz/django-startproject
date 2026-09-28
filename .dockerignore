@@ -12,3 +12,5 @@ staticfiles
 *.sqlite3
 **/.pnpm-store
 .dev
+frontend/*.tsbuildinfo
+frontend/.schema

@@ -100,6 +100,7 @@ typecheck:
     uv run --locked basedpyright
     pnpm --dir frontend typecheck
 
+# Vite production build in frontend/dist; the release image builds its own copy.
 frontend-build:
     pnpm --dir frontend build
 
@@ -113,6 +114,10 @@ api-check:
     pnpm --dir frontend api:check
 
 check: lint typecheck api-check frontend-build test
+
+# Build the release image (or validate an existing tag) and run it with DEBUG=false against disposable PostgreSQL.
+release-check image="":
+    bash scripts/release-check.sh {{image}}
 
 # Explicit upgrades only; bootstrap never changes locks.
 upgrade:

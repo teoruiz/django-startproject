@@ -1,7 +1,7 @@
 # Application architecture
 
 ```text
-React + React Router + TanStack Query (Vite on the host, localhost:5173)
+Development: React + React Router + TanStack Query (Vite on the host, localhost:5173)
   /api proxy, session cookie + CSRF
 Django (runserver on the host, localhost:8000)
   /api/auth/browser/v1/* -> allauth Headless
@@ -9,6 +9,11 @@ Django (runserver on the host, localhost:8000)
   /admin/                -> Unfold
   /health/               -> database readiness probe
 PostgreSQL 17 (Docker Compose, 127.0.0.1:5432)
+
+Production: one release image and origin (Gunicorn + Django + WhiteNoise)
+  /api/*, /admin/*, /health/ -> Django, as above
+  /static/*, /assets/*       -> WhiteNoise (admin static, content-hashed Vite build)
+  other HTML navigations     -> the SPA's index.html
 ```
 
 Django owns business rules and authorization. Authentication is not sufficient authorization:
@@ -48,38 +53,28 @@ in memory and compares content, without relying on Git or silently rewriting tra
 `POST /api/tasks/welcome` returns a task ID without assuming durable result storage. Tests prove execution
 with ImmediateBackend. Production background delivery, retries and workers are deliberately unconfigured.
 
-The Docker release stage is backend-only and installs no development dependencies. Static collection
-builds admin assets; it does not bundle React. Migrations are an explicit release step. Production must
-provide its own secrets, PostgreSQL, email, HTTPS/proxy settings, media storage and frontend routing.
+The Docker release image builds the React SPA in a Node stage and copies only its static output into the Python
+runtime, which has no Node or development dependencies. Static collection builds admin assets. Migrations are an
+explicit release step. Production must provide secrets, PostgreSQL, email, HTTPS/proxy settings and media storage.
 `django-storages` is available for an eventual storage decision. Health checks query the database without
 exposing credentials/errors. No production hosting provider is assumed.
 
-## How the frontend reaches Django in production
+## Production
 
 In development, the browser loads `http://localhost:5173` and calls `/api/...` on that same origin.
-Vite forwards those requests to Django on `127.0.0.1:${DJANGO_PORT}` (8000 by default). This lets the browser use Django's session
-cookie without cross-origin requests. CSRF protection still applies to writes.
+Vite forwards those requests to Django on `127.0.0.1:${DJANGO_PORT}` (8000 by default). This lets the browser use
+Django's session cookie without cross-origin requests. CSRF protection still applies to writes.
 
-A production deployment can preserve that browser-facing arrangement:
-
-```text
-https://product.example/          -> built React files
-https://product.example/api/...   -> Django (including allauth)
-https://product.example/admin/... -> Django
-https://product.example/static/... -> Django admin assets
-```
-
-The static files and Django may run on different infrastructure; a reverse proxy or CDN can route
-the paths while exposing one origin to the browser. This example does not choose a hosting provider.
-Vite's development proxy is not a production server, and the starter does not configure this routing.
+Production keeps that browser-facing arrangement without Vite: the release image serves everything from one origin.
+WhiteNoise serves the Vite build's content-hashed `/assets/` (cached as immutable) and admin `/static/`.
+Django serves `/api/`, `/admin/` and `/health/`. A catch-all view returns the SPA's `index.html` (`no-cache`) for other
+browser navigations, so direct navigation and refresh work. Missing assets and API paths still return errors.
+See [decision 003](../decisions/003-production-frontend-hosting.md) for the routing rules and
+[the production release guide](deployment.md) for configuration, HTTPS/proxy handling and release behavior.
 
 Serving React at `https://app.example.com` and Django at `https://api.example.com` instead creates
 two browser origins. The current client's `credentials: "same-origin"` and relative URLs would need
 to change, alongside explicit credentialed CORS, trusted CSRF origins and cookie handling. Unrelated
 sites may also face third-party-cookie restrictions. Merely setting ALLOWED_HOSTS does not configure
-these things. Whichever deployment is chosen, HTTPS and Django's secure cookies remain required.
-
-That is the deferred decision: where requests go and how the browser sends its session cookie.
-There is no missing authentication service, and Django remains the authority for every request.
-
-See [allauth's cross-origin guidance](https://docs.allauth.org/en/latest/headless/cors.html) when deploying across origins.
+these things. See [allauth's cross-origin guidance](https://docs.allauth.org/en/latest/headless/cors.html)
+before choosing that. Whichever deployment is chosen, HTTPS and Django's secure cookies remain required.

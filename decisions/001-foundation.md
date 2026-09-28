@@ -12,10 +12,9 @@ and tests and provides no durable queue. Before relying on background execution 
 (such as django-tasks-db), delivery/retry policy, worker lifecycle and monitoring. Use transaction.on_commit when
 queueing tasks that depend on committed database state.
 
-Development runs Django and Vite on the host; Compose contains only PostgreSQL (see 002). The backend release image
-serves Django/admin static files only.
-Frontend hosting is intentionally undecided; a production design must supply SPA fallback and a same-origin API
-route or explicitly configure cross-origin cookies, CSRF and CORS. Do not infer deployment readiness from a build.
+Development runs Django and Vite on the host; Compose contains only PostgreSQL (see 002). The release image serves
+Django, admin static files and the built React SPA from one origin (see 003). A hosting vendor and infrastructure
+remain deployment decisions; passing the release check is not a deployment.
 
 Supabase is absent. Realtime or Storage may later be infrastructure services; no Supabase Auth, browser/database CRUD,
 Edge Functions or business authorization in RLS. Go is absent; it is reserved for genuinely independent services.

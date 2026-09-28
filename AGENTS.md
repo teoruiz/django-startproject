@@ -30,6 +30,8 @@ Keep this guide concise and update it as the product gains domain-specific conve
 - `just manage <command>` runs Django management commands; `just test` runs pytest against PostgreSQL.
 - Run focused tests while iterating and `just check` before handing off application changes. It includes lint,
   Python/TypeScript checks, API contract checks, frontend build and tests. Report what ran and any remaining failures.
+- Run `just release-check` after changing the Dockerfile, dependencies, settings, URL routing or static/frontend serving.
+  It runs the release image with DEBUG=false against disposable PostgreSQL.
 
 ## Backend rules
 
@@ -43,7 +45,9 @@ Keep this guide concise and update it as the product gains domain-specific conve
   Add a durable backend only when a production workflow requires it; no django-q2, Celery, Redis or RabbitMQ.
 - Supabase and Go are absent. Optional Supabase Realtime/Storage may later provide infrastructure; never add Supabase
   Auth, direct browser/database CRUD, Edge Functions or business authorization in RLS. Go is for independent services only.
-- Frontend production hosting and durable task execution remain explicit deployment decisions; a build is not deployment.
+- The release image serves Django and the built SPA from one origin ([decision 003](decisions/003-production-frontend-hosting.md),
+  [production release](docs/deployment.md)). Keep the SPA fallback URL last; add new top-level backend prefixes to its
+  reserved list. Hosting vendor and durable task execution remain deployment decisions; a passing check is not a deployment.
 
 ## Frontend and API workflow
 
@@ -60,6 +64,6 @@ Keep this guide concise and update it as the product gains domain-specific conve
 ## Template maintenance — only when `manage.py` is absent
 
 - In the template checkout, the generated application is the artifact. Run `just template-test` against a fresh local
-  generation; also run `just template-test compose` for PostgreSQL, Docker or development-server changes.
+  generation; also run `just template-test compose` for PostgreSQL, Docker, release-image or development-server changes.
 - Generate with Django's standard `startproject --template` command. Render only Python; preserve JS/TS/Just/Actions braces.
   The validation script filters local secrets/caches. Never validate only the template source tree.

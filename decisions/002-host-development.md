@@ -27,4 +27,5 @@ The supervisor sends SIGTERM to its own child process groups and SIGKILL to any 
 `just down` also stops the PostgreSQL container and keeps its volume.
 No process manager dependency (honcho, overmind, concurrently) is added.
 
-The backend `Dockerfile` remains the production/release image and is validated by `just template-test compose`.
+The `Dockerfile` is the production/release image only (see 003). `just release-check` validates it, and
+`just template-test compose` runs that check for a fresh generated project.
