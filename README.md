@@ -133,7 +133,8 @@ application's checks directly. It never pushes commits, tags or deployment branc
 - `config/`: Django settings/URLs (Python templates until generation).
 - `frontend/`: independent Vite application; `src/components/ui/` holds shadcn source.
 - `docs/`, `domains/`, `ux/`, `decisions/`: engineering, domain, UX and architecture notes.
-- `AGENTS.md`: shared architecture constraints and agent workflow.
+- `AGENTS.md`: application agent workflow, with a separate conditional section for template maintainers.
+- [Backend conventions](docs/backend-conventions.md): Django models, workflows, migrations, tests and Unfold admin.
 - `compose.yml`: development PostgreSQL only.
 - `Dockerfile`: backend production/release image. WhiteNoise serves admin static files in release.
 

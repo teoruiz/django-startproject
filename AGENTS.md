@@ -1,25 +1,65 @@
-# Working in this repository
+# Working on the application
 
-- This is a Django startproject template. The generated application is the artifact. Inspect first and validate changes
-  with `just template-test`; use `just template-test compose` for PostgreSQL/Docker changes. Generated apps use `just check`.
-- Development runs Django and Vite on the host (`just up`, or `just backend`/`just frontend`); Docker Compose runs only
-  PostgreSQL. Stop servers with Ctrl-C or `just stop`; `just down` also stops PostgreSQL. Never add development containers.
-- Django owns domain models, invariants, permissions, workflows and authorization. PostgreSQL is authoritative;
-  SQLite is only for disposable validation. Use Django ORM, Ninja and allauth Headless browser sessions with CSRF.
-- Write domain decisions in `domains/` and material architecture choices in `decisions/` before implementation.
-  Describe UX behavior in `ux/` before implementation when practical. Paper is the intended visual design workspace.
-- React/TypeScript/Vite is the product frontend. Use existing shadcn/ui and project/domain components; extend them
-  rather than inventing arbitrary primitives. Ninja OpenAPI is the business contract: run `just api-generate` after
-  changing schemas and commit generated types. Do not hand-edit or duplicate them.
-- Use `django.tasks` for work. ImmediateBackend is for development/tests; no django-q2, Celery, Redis or RabbitMQ.
-  Add a durable task backend only when a real production workflow requires it.
-- Use uv exclusively for Python and pnpm for frontend dependencies. Commit both lockfiles. Run lint, tests and
-  type checks appropriate to the change. Bootstrap consumes locks; upgrading dependencies is an explicit action.
-- Models use TimeStampedModel, documented fields, explicit relationships/choices and meaningful string representations.
-  Admin classes and inlines use Unfold. Keep abstractions proportional to actual product requirements.
-- Verify UI changes in the running generated application with agent-browser, including relevant auth and API flows.
-  Playwright is not in the baseline. Persistent Playwright tests require important regression-critical flows.
-- Supabase and Go are absent. Optional Supabase Realtime/Storage may be infrastructure later; Django still owns
-  authentication and authorization. Never introduce direct browser/database CRUD, Supabase Auth or Edge Functions.
-- Template rendering is limited to Python. Preserve JS/TS/Just/GitHub Actions braces. Use Django's standard `startproject --template` command. Template validation filters local secrets/caches
-  internally. Never validate only the template source tree.
+These instructions guide product development in the generated Django/React application.
+Read [README.md](README.md) for setup and [architecture](docs/architecture.md) for system boundaries.
+Keep this guide concise and update it as the product gains domain-specific conventions.
+
+## Find the relevant code
+
+- `config/`: Django settings, URLs and application entry points.
+- `core/`: identity, admin, initial Ninja API, task example and backend tests.
+- `frontend/src/`: React routes, API clients and components; `components/ui/` contains shadcn/ui.
+- `domains/`, `ux/`, `decisions/`: domain rules, user flows and architecture decisions; `docs/` holds engineering guidance.
+
+## Before implementation
+
+- Inspect existing code and the relevant domain/UX notes before extending a feature.
+- Make domain decisions explicit in `domains/` and material architecture choices in `decisions/` before implementation.
+- Describe UX states, errors and acceptance criteria in `ux/` when practical. Paper is the visual design workspace;
+  record relevant document/frame links there.
+- Keep abstractions proportional to actual requirements. Extend established patterns and components.
+
+## Local development and checks
+
+- Use uv exclusively for Python and pnpm for frontend dependencies. Commit `uv.lock` and `frontend/pnpm-lock.yaml`;
+  bootstrap consumes locks, and dependency upgrades are an explicit action. Versions and lint settings live in config.
+- `just bootstrap` installs dependencies, starts PostgreSQL and migrates. `just up` runs Django and Vite on the host;
+  `just backend` / `just frontend` run them separately. Compose is only for PostgreSQL; do not add development containers.
+- Ctrl-C or `just stop` stops local servers; `just down` also stops PostgreSQL and retains its data.
+- Configure ports and environment in `.env` using `.env-dist`; use `.venv/bin/python` as the editor interpreter.
+- `just manage <command>` runs Django management commands; `just test` runs pytest against PostgreSQL.
+- Run focused tests while iterating and `just check` before handing off application changes. It includes lint,
+  Python/TypeScript checks, API contract checks, frontend build and tests. Report what ran and any remaining failures.
+
+## Backend rules
+
+- Django owns domain models, invariants, permissions, workflows and authorization. Use the ORM and Ninja.
+  PostgreSQL is authoritative for development and production; SQLite is only for disposable validation.
+- Read [backend conventions](docs/backend-conventions.md) before changing models, migrations or admin.
+  Use `TimeStampedModel`, documented fields, explicit choices/relationships and Unfold admin classes/inlines.
+- Allauth Headless owns authentication through browser sessions with CSRF. Scope queries and authorize domain actions
+  in Django; authenticated users are not automatically authorized for every object. Never disable CSRF to fix a proxy.
+- Use `django.tasks` for work. ImmediateBackend is synchronous and non-durable, for development/tests only.
+  Add a durable backend only when a production workflow requires it; no django-q2, Celery, Redis or RabbitMQ.
+- Supabase and Go are absent. Optional Supabase Realtime/Storage may later provide infrastructure; never add Supabase
+  Auth, direct browser/database CRUD, Edge Functions or business authorization in RLS. Go is for independent services only.
+- Frontend production hosting and durable task execution remain explicit deployment decisions; a build is not deployment.
+
+## Frontend and API workflow
+
+- React/TypeScript/Vite is the product frontend. Use existing shadcn/ui and project/domain components before adding primitives.
+  Use React Router for navigation and TanStack Query for server state. Django templates support admin/infrastructure pages.
+- Ninja OpenAPI is the business contract; authentication types come from installed allauth's schema.
+  Run `just api-generate` after contract changes and commit the generated types. Never hand-edit or duplicate those schemas.
+- Use the existing openapi-fetch clients and relative `/api/...` URLs. Preserve session cookies and CSRF handling;
+  frontend route guards are presentation, not authorization.
+- Verify UI changes with agent-browser in the running application, including relevant routing, auth/API flows and console errors.
+  Follow [browser verification](docs/verification.md). Playwright is not baseline tooling; persistent tests are reserved
+  for important regression-critical flows.
+
+## Template maintenance — only when `manage.py` is absent
+
+- In the template checkout, the generated application is the artifact. Run `just template-test` against a fresh local
+  generation; also run `just template-test compose` for PostgreSQL, Docker or development-server changes.
+- Generate with Django's standard `startproject --template` command. Render only Python; preserve JS/TS/Just/Actions braces.
+  The validation script filters local secrets/caches. Never validate only the template source tree.
