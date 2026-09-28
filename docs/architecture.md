@@ -1,14 +1,14 @@
 # Application architecture
 
 ```text
-React + React Router + TanStack Query (localhost:5173)
+React + React Router + TanStack Query (Vite on the host, localhost:5173)
   /api proxy, session cookie + CSRF
-Django (localhost:8000)
+Django (runserver on the host, localhost:8000)
   /api/auth/browser/v1/* -> allauth Headless
   /api/*                 -> Ninja + Django authorization
   /admin/                -> Unfold
   /health/               -> database readiness probe
-PostgreSQL 17
+PostgreSQL 17 (Docker Compose, 127.0.0.1:5432)
 ```
 
 Django owns business rules and authorization. Authentication is not sufficient authorization:
@@ -57,7 +57,7 @@ exposing credentials/errors. No production hosting provider is assumed.
 ## How the frontend reaches Django in production
 
 In development, the browser loads `http://localhost:5173` and calls `/api/...` on that same origin.
-Vite forwards those requests to Django on port 8000. This lets the browser use Django's session
+Vite forwards those requests to Django on `127.0.0.1:${DJANGO_PORT}` (8000 by default). This lets the browser use Django's session
 cookie without cross-origin requests. CSRF protection still applies to writes.
 
 A production deployment can preserve that browser-facing arrangement:

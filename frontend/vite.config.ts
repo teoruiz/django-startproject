@@ -9,12 +9,13 @@ export default defineConfig({
         alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
     },
     server: {
-        port: 5173,
+        host: "127.0.0.1",
+        port: Number(process.env.FRONTEND_PORT ?? 5173),
         strictPort: true,
         proxy: {
+            // Same-origin /api keeps Django's session cookie and CSRF checks intact.
             "/api": {
-                target:
-                    process.env.DJANGO_PROXY_TARGET ?? "http://localhost:8000",
+                target: `http://127.0.0.1:${process.env.DJANGO_PORT ?? 8000}`,
                 changeOrigin: false,
             },
         },

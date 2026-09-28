@@ -32,7 +32,6 @@ jobs:
             just template-test "$DATABASE"
           elif [ "$DATABASE" = compose ]; then
             just bootstrap
-            just up -d --wait
             just manage check
             just manage makemigrations --check --dry-run
             just check
@@ -45,9 +44,9 @@ jobs:
             pnpm --dir frontend install --frozen-lockfile
             just lint typecheck api-check frontend-build
           fi
-      - name: Container logs
+      - name: PostgreSQL logs
         if: failure()
-        run: docker compose logs || true
-      - name: Stop generated application
+        run: test ! -f manage.py || docker compose logs db || true
+      - name: Remove development PostgreSQL
         if: always()
         run: test ! -f manage.py || docker compose down --volumes

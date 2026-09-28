@@ -1,3 +1,4 @@
+# Development PostgreSQL only. Django and Vite run on the host (see justfile).
 services:
   db:
     image: postgres:17-bookworm
@@ -5,6 +6,8 @@ services:
       POSTGRES_DB: app
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -13,46 +16,5 @@ services:
       timeout: 3s
       retries: 30
 
-  web:
-    build:
-      context: .
-      target: dev
-    env_file: .env
-    volumes:
-      - .:/app
-    ports:
-      - "127.0.0.1:${WEB_PORT:-8000}:8000"
-    depends_on:
-      db:
-        condition: service_healthy
-    init: true
-    healthcheck:
-      test: ["CMD", "sh", "healthcheck-web.sh"]
-      interval: 3s
-      timeout: 5s
-      start_period: 10s
-      retries: 20
-
-  frontend:
-    build: ./frontend
-    environment:
-      DJANGO_PROXY_TARGET: http://web:8000
-    volumes:
-      - ./frontend:/app
-      - frontend-modules:/app/node_modules
-    ports:
-      - "127.0.0.1:${FRONTEND_PORT:-5173}:5173"
-    depends_on:
-      web:
-        condition: service_healthy
-    init: true
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:5173').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
-      interval: 3s
-      timeout: 5s
-      start_period: 10s
-      retries: 20
-
 volumes:
   postgres-data:
-  frontend-modules:

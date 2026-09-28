@@ -7,13 +7,6 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked --no-dev
 
-FROM base AS dev
-RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked
-RUN useradd --create-home app && chown -R app:app /app /opt/venv
-COPY --chown=app:app . .
-USER app
-CMD ["sh", "start-dev.sh"]
-
 FROM base AS release
 COPY . .
 RUN DATABASE_URL=sqlite://:memory: SECRET_KEY=build-only python manage.py collectstatic --noinput

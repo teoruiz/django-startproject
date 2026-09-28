@@ -2,6 +2,8 @@
 
 - This is a Django startproject template. The generated application is the artifact. Inspect first and validate changes
   with `just template-test`; use `just template-test compose` for PostgreSQL/Docker changes. Generated apps use `just check`.
+- Development runs Django and Vite on the host (`just up`, or `just backend`/`just frontend`); Docker Compose runs only
+  PostgreSQL. Stop servers with Ctrl-C or `just stop`; `just down` also stops PostgreSQL. Never add development containers.
 - Django owns domain models, invariants, permissions, workflows and authorization. PostgreSQL is authoritative;
   SQLite is only for disposable validation. Use Django ORM, Ninja and allauth Headless browser sessions with CSRF.
 - Write domain decisions in `domains/` and material architecture choices in `decisions/` before implementation.

@@ -9,7 +9,8 @@ React Router and TanStack Query. Dependencies are locked with uv and pnpm.
 
 ## Generate and run
 
-Install Docker with Compose, uv, Just, Node 22.12+ and pnpm 10.28.1. Generate with Django's standard command:
+Install uv, Just, Node 22.12+, pnpm 10.28.1 and Docker with Compose. Django and Vite run directly
+on your machine; Docker Compose runs only the development PostgreSQL. Generate with Django's standard command:
 
 ```sh
 uv run --no-project --with django==6.1.1 django-admin startproject \
@@ -30,14 +31,17 @@ Use an archive or a clean checkout for normal generation: Django copies local fi
 `.env` and installed dependencies. For testing changes from a working checkout, `just template-test`
 handles secret/cache filtering internally and then invokes the same Django command.
 
-Bootstrap copies `.env-dist` if needed, installs locked dependencies, builds the development
-images, starts PostgreSQL and applies migrations. It never upgrades dependencies or resets data.
-Compose starts exactly three services: PostgreSQL 17, Django and Vite. Database data is retained
-by `just down`; do not remove volumes unless you intend to erase that project's database.
+Bootstrap copies `.env-dist` to `.env` if needed, installs locked dependencies into `.venv` and
+`frontend/node_modules`, starts PostgreSQL 17 and applies migrations. It never upgrades dependencies or resets data.
+`just up` starts PostgreSQL if needed, then runs Django (`uv run ... runserver`) and Vite (`pnpm dev`)
+in one terminal with `django |` / `vite |` prefixed logs. Ctrl-C stops both; if either server exits,
+the other is stopped and `just up` fails.
 
 Open **http://localhost:5173**. Vite proxies relative `/api/...` calls to Django at port 8000.
 Django admin is at **http://localhost:8000/admin/** and Ninja docs at **http://localhost:8000/api/docs**.
-Create your first account in a second terminal:
+Both servers listen on 127.0.0.1 only, and PostgreSQL is published only on `127.0.0.1:5432`.
+Change `POSTGRES_PORT`, `DJANGO_PORT` or `FRONTEND_PORT` in `.env`; `DATABASE_URL` and
+`CSRF_TRUSTED_ORIGINS` derive from them. Create your first account in a second terminal:
 
 ```sh
 just manage createsuperuser
@@ -53,7 +57,14 @@ See [authentication and deployment details](docs/architecture.md).
 ## Daily commands
 
 ```sh
-just test                 # pytest against Compose PostgreSQL (bootstrap first)
+just up                   # PostgreSQL + Django + Vite; Ctrl-C stops both servers
+just backend              # PostgreSQL + Django only
+just frontend             # Vite only (proxies /api to DJANGO_PORT)
+just stop                 # stop servers started by up/backend/frontend in another terminal
+just down                 # stop servers and the PostgreSQL container; data volume is kept
+just db                   # start only PostgreSQL; just db-logs -f follows its logs
+just manage <command>     # manage.py through uv, e.g. shell, createsuperuser
+just test                 # pytest against development PostgreSQL (starts it if needed)
 just lint                 # Ruff and frontend ESLint/Prettier checks
 just typecheck            # basedpyright + TypeScript
 just frontend-build       # frontend/dist, no hosting assumption
@@ -62,13 +73,16 @@ just api-check            # fail if generated contracts have drifted
 just check                # lint, types, contracts, build and PostgreSQL tests
 just manage makemigrations
 just manage migrate
-just logs -f
-just down
 ```
 
+`just down` never deletes data. To erase this project's database, run `docker compose down --volumes`
+explicitly and then `just bootstrap`. Editors should use the project interpreter at `.venv/bin/python`
+(created by `uv sync`; basedpyright already points at `.venv`). `uv run` is the supported way to invoke
+Python tools; activating the virtual environment is optional.
+
 Use `uv add` / `uv remove` and `pnpm --dir frontend add` / `remove` for dependencies.
-Commit `uv.lock` and `frontend/pnpm-lock.yaml`. After changing Python dependencies run `just build`;
-restart the frontend after dependency changes. `just upgrade` is an explicit dependency update.
+Commit `uv.lock` and `frontend/pnpm-lock.yaml`. `uv run --locked` keeps `.venv` in sync; restart
+the servers after dependency changes. `just upgrade` is an explicit dependency update.
 `just format` fixes formatting. Optional Git hooks: `uv run pre-commit install`.
 The pyproject's `django-product` name is package metadata, independent of the generated directory name.
 
@@ -82,20 +96,24 @@ Run these **in the template checkout**, not in a generated application:
 
 ```sh
 just template-test             # fresh temporary project, SQLite; no external services
-just template-test compose     # fresh project, full PostgreSQL/Compose setup and release-image build
+just template-test compose     # fresh project, Docker PostgreSQL, host servers and release-image build
 ```
 
 Both paths install locked dependencies, check Django, apply migrations, test auth/CSRF/tasks,
 check migration drift, lint, typecheck, verify generated contracts and build the frontend.
-Temporary files are removed on exit. The Compose path also removes only its own disposable
-containers and volumes. SQLite is only for fast validation; PostgreSQL is the application target.
-Ports 8000 and 5173 must be free for Compose validation.
+The Compose path runs the generated project's own `just bootstrap` and `just test` against Docker
+PostgreSQL, then starts the host servers with `just up` and checks login, CSRF, `/api/me` and the task
+example through the Vite proxy. It verifies that Ctrl-C, a crashing server and `just stop` all leave no
+server processes, that `just down` stops PostgreSQL, and builds the release image.
+It picks free ports; set `TEMPLATE_POSTGRES_PORT`, `TEMPLATE_DJANGO_PORT` or `TEMPLATE_FRONTEND_PORT`
+to choose them. Temporary files, its own container, volume and image are removed on exit.
+SQLite is only for fast validation; PostgreSQL is the application target.
 
 For browser verification or debugging, retain the disposable project and services:
 
 ```sh
 TEMPLATE_KEEP=1 just template-test compose
-# Use the printed path, then provision an account with just manage createsuperuser.
+# PostgreSQL keeps running; cd to the printed path and run just up on the printed ports.
 # Follow docs/verification.md; when finished, use the printed cleanup command.
 ```
 
@@ -109,7 +127,8 @@ application's checks directly. It never pushes commits, tags or deployment branc
 - `frontend/`: independent Vite application; `src/components/ui/` holds shadcn source.
 - `docs/`, `domains/`, `ux/`, `decisions/`: engineering, domain, UX and architecture notes.
 - `AGENTS.md`: concise agent workflow; `CLAUDE.md` points to the same instructions.
-- `Dockerfile`: backend dev/release stages. WhiteNoise serves admin static files in release.
+- `compose.yml`: development PostgreSQL only.
+- `Dockerfile`: backend production/release image. WhiteNoise serves admin static files in release.
 
 Paper is the visual design workspace. UI work is verified in the real application with agent-browser.
 Playwright is not included; persistent tests can be added later for regression-critical flows.

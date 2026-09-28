@@ -12,7 +12,8 @@ and tests and provides no durable queue. Before relying on background execution 
 (such as django-tasks-db), delivery/retry policy, worker lifecycle and monitoring. Use transaction.on_commit when
 queueing tasks that depend on committed database state.
 
-Compose contains PostgreSQL, Django and Vite. The backend release image serves Django/admin static files only.
+Development runs Django and Vite on the host; Compose contains only PostgreSQL (see 002). The backend release image
+serves Django/admin static files only.
 Frontend hosting is intentionally undecided; a production design must supply SPA fallback and a same-origin API
 route or explicitly configure cross-origin cookies, CSRF and CORS. Do not infer deployment readiness from a build.
 

@@ -16,3 +16,4 @@ frontend/*.tsbuildinfo
 compose.override.yml
 frontend/.schema/
 .pnpm-store/
+.dev/
