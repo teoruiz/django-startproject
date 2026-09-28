@@ -75,6 +75,10 @@ just manage makemigrations
 just manage migrate
 ```
 
+`just stop` requests shutdown from the supervisor without signaling recorded PIDs. Records for dead
+PIDs are removed automatically. If shutdown cannot be confirmed, it fails and preserves the records;
+inspect the listed records and processes before manually removing stale state.
+
 `just down` never deletes data. To erase this project's database, run `docker compose down --volumes`
 explicitly and then `just bootstrap`. Editors should use the project interpreter at `.venv/bin/python`
 (created by `uv sync`; basedpyright already points at `.venv`). `uv run` is the supported way to invoke
@@ -101,6 +105,9 @@ just template-test compose     # fresh project, Docker PostgreSQL, host servers 
 
 Both paths install locked dependencies, check Django, apply migrations, test auth/CSRF/tasks,
 check migration drift, lint, typecheck, verify generated contracts and build the frontend.
+Both also verify that an unrelated process survives stale records, unconfirmed records are retained,
+and records for dead processes are removed. Compose validation also checks shutdown across time zones
+and that a paused supervisor retains its record until it resumes and handles the request.
 The Compose path runs the generated project's own `just bootstrap` and `just test` against Docker
 PostgreSQL, then starts the host servers with `just up` and checks login, CSRF, `/api/me` and the task
 example through the Vite proxy. It verifies that Ctrl-C, a crashing server and `just stop` all leave no
@@ -126,7 +133,7 @@ application's checks directly. It never pushes commits, tags or deployment branc
 - `config/`: Django settings/URLs (Python templates until generation).
 - `frontend/`: independent Vite application; `src/components/ui/` holds shadcn source.
 - `docs/`, `domains/`, `ux/`, `decisions/`: engineering, domain, UX and architecture notes.
-- `AGENTS.md`: concise agent workflow; `CLAUDE.md` points to the same instructions.
+- `AGENTS.md`: shared architecture constraints and agent workflow.
 - `compose.yml`: development PostgreSQL only.
 - `Dockerfile`: backend production/release image. WhiteNoise serves admin static files in release.
 

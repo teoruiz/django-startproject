@@ -15,7 +15,16 @@ browser keeps one origin and allauth Headless sessions and Django CSRF behave as
 
 `just up` supervises both servers with Bash only: each runs in its own process group with prefixed output.
 Ctrl-C, `just stop` or either server exiting terminates both groups, including runserver's autoreloader child.
-`just stop` uses PID files in `.dev/`; `just down` also stops the PostgreSQL container and keeps its volume.
+`just stop` writes a shutdown request beside each supervisor's record in `.dev/`. The supervisor
+acknowledges by removing the request, then shuts down its child process groups and removes its record.
+There is no wall-clock identity comparison, and stop never sends a signal to a PID read from disk.
+It uses `kill -0` only to discard records whose recorded PID no longer exists. Unanswered requests with
+live PIDs (including reused PIDs) or malformed records time out with an error and remain available for
+inspection. A timeout cannot prove that a supervisor is dead: it may be paused or busy. This prevents
+both unrelated process termination and silent loss of a live supervisor's record.
+The supervisor sends SIGTERM to its own child process groups and SIGKILL to any still alive after 5 seconds:
+`uv run` forwards SIGTERM, so runserver's autoreloader receives it twice and can occasionally hang.
+`just down` also stops the PostgreSQL container and keeps its volume.
 No process manager dependency (honcho, overmind, concurrently) is added.
 
 The backend `Dockerfile` remains the production/release image and is validated by `just template-test compose`.

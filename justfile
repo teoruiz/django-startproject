@@ -33,15 +33,40 @@ stop:
     #!/usr/bin/env bash
     set -uo pipefail
     shopt -s nullglob
-    for file in .dev/serve-*.pid; do
-        kill -TERM "$(<"$file")" 2>/dev/null || rm -f "$file"
+    # Remove records a dead supervisor never finished publishing (serve-PID.XXXXXXXX).
+    for file in .dev/serve-*; do
+        [[ $file == *.pid || $file == *.stop ]] && continue
+        pid=${file#.dev/serve-}
+        pid=${pid%%.*}
+        case "$pid" in ''|*[!0-9]*) continue ;; esac
+        kill -0 "$pid" 2>/dev/null || rm -f "$file"
     done
+    files=(.dev/serve-*.pid)
+    for file in "${files[@]}"; do touch "$file.stop"; done
     for _ in $(seq 100); do
-        files=(.dev/serve-*.pid)
-        [[ ${#files[@]} == 0 ]] && exit 0
+        pending=()
+        for file in "${files[@]}"; do
+            if [[ ! -f "$file" ]]; then
+                rm -f "$file.stop"
+                continue
+            fi
+            # This is only a liveness probe, never an ownership check or a signal.
+            # A live/reused PID or unreadable record must not be declared stale.
+            pid=""
+            IFS= read -r pid < "$file" || true
+            case "$pid" in
+                ''|*[!0-9]*|0|1) ;;
+                *) if ! kill -0 "$pid" 2>/dev/null; then
+                       rm -f "$file" "$file.stop"
+                       continue
+                   fi ;;
+            esac
+            pending+=("$file")
+        done
+        [[ ${#pending[@]} == 0 ]] && exit 0
         sleep 0.1
     done
-    echo "Local servers did not stop: ${files[*]}" >&2
+    echo "Shutdown not confirmed; records retained: ${pending[*]}" >&2
     exit 1
 
 # Stop local servers and the PostgreSQL container. The database volume is kept.
@@ -106,19 +131,31 @@ _serve +servers:
     set -uo pipefail
     set -m
     mkdir -p .dev
-    pidfile=".dev/serve-$$.pid"
+    # A new control path prevents old requests from reaching a later owner of this PID.
+    record_tmp=$(mktemp ".dev/serve-$$.XXXXXXXX") || exit 1
+    pidfile="$record_tmp.pid"
     pids=()
     color=()
     if [[ -t 1 ]]; then export FORCE_COLOR=1; color=(--force-color); fi
     shutdown() {
         trap '' INT TERM
         for pid in "${pids[@]}"; do kill -TERM -- "-$pid" 2>/dev/null; done
+        # uv forwards TERM, so runserver's reloader gets it twice and can occasionally hang; escalate after 5s.
+        for _ in $(seq 50); do
+            alive=0
+            for pid in "${pids[@]}"; do kill -0 -- "-$pid" 2>/dev/null && alive=1; done
+            [[ $alive == 0 ]] && break
+            sleep 0.1
+        done
+        for pid in "${pids[@]}"; do kill -KILL -- "-$pid" 2>/dev/null; done
         wait
-        rm -f "$pidfile"
+        rm -f "$record_tmp" "$pidfile" "$pidfile.stop"
         exit "$1"
     }
     trap 'shutdown 0' INT TERM
-    echo $$ > "$pidfile"
+    # Publish the complete record atomically so stop never reads a partial one.
+    printf '%s\n' "$$" > "$record_tmp"
+    mv "$record_tmp" "$pidfile"
     for server in {{servers}}; do
         case $server in
             django) command=(uv run --locked python manage.py runserver ${color[@]+"${color[@]}"} "127.0.0.1:$DJANGO_PORT") ;;
@@ -130,6 +167,10 @@ _serve +servers:
         pids+=("$!")
     done
     while :; do
+        if [[ -f "$pidfile.stop" ]]; then
+            rm -f "$pidfile.stop"
+            shutdown 0
+        fi
         for pid in "${pids[@]}"; do
             if ! kill -0 "$pid" 2>/dev/null; then
                 wait "$pid"

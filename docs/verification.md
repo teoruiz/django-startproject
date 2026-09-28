@@ -45,6 +45,9 @@ Validated fresh artifacts generated from the local working template after moving
   Through the Vite proxy it verified allauth login with CSRF, `/api/me`, the task example, CSRF rejection and logout.
   Ctrl-C, a killed runserver and `just stop` each left no listening ports, processes or PID files;
   `just down` stopped the PostgreSQL container. Its container, volume and image were removed.
+- `just stop` never signaled an unrelated process holding a recorded PID, kept unconfirmed records (reused PID,
+  malformed, paused supervisor) with an error, removed dead records, and worked across time zones. Twenty
+  `just up`/`just stop` cycles left no processes; three needed the SIGKILL fallback for a hung runserver reloader.
 - agent-browser against `just up` in the retained project verified routing/not-found, direct `/account`,
   invalid and valid login, authenticated `/api/me` rendering, refresh, the CSRF-protected task enqueue,
   sign-out and API denial, and a 390px viewport without overflow. No browser runtime errors.

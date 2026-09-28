@@ -68,6 +68,46 @@ test ! -d .git
 test ! -d frontend/node_modules
 test ! -f frontend/Dockerfile
 
+# A reused PID must never be signaled. Without acknowledgement, a live process
+# or malformed record is inconclusive and must remain visible after a timeout.
+uv run --no-project python - <<'PYTHON'
+import subprocess
+import sys
+from pathlib import Path
+
+state = Path(".dev")
+state.mkdir(exist_ok=True)
+unrelated = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+try:
+    records = {
+        "serve-stale.pid": f"{unrelated.pid}\n",
+        "serve-legacy.pid": f"{unrelated.pid}\n",
+        "serve-malformed.pid": "not-a-pid\ninvalid\n",
+        "serve-invalid.pid": "-1\ninvalid\n",
+    }
+    (state / f"serve-{unrelated.pid}.Live0000").write_text("")
+    for name, value in records.items():
+        (state / name).write_text(value)
+        (state / f"{name}.stop").write_text("old request\n")
+    result = subprocess.run(["just", "stop"], timeout=15)
+    assert result.returncode != 0, "Unacknowledged live records must not report success"
+    assert unrelated.poll() is None, "just stop terminated an unrelated process"
+    assert all((state / name).exists() for name in records), "Unconfirmed records were deleted"
+    assert (state / f"serve-{unrelated.pid}.Live0000").exists(), "A live partial record was deleted"
+finally:
+    unrelated.terminate()
+    unrelated.wait(timeout=5)
+# Malformed records require manual inspection; confirmed dead owners can be cleaned automatically.
+for name in ("serve-malformed.pid", "serve-invalid.pid"):
+    (state / name).unlink()
+    (state / f"{name}.stop").unlink()
+(state / "serve-999999999.Dead0000").write_text("")
+subprocess.run(["just", "stop"], check=True, timeout=15)
+assert not list(state.glob("serve-*")), "Dead supervisor state was not removed"
+subprocess.run(["just", "stop"], check=True, timeout=15)
+print("Unrelated process survived; unknown records retained and dead records cleaned.")
+PYTHON
+
 free_port() {
     uv run --no-project python -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'
 }
@@ -158,6 +198,34 @@ else
     assert_stopped
     echo "Ctrl-C stopped both servers."
 
+    # A paused supervisor cannot acknowledge, but must not lose its control record.
+    start_group just up
+    wait_for "http://127.0.0.1:$DJANGO_PORT/health/" 200
+    wait_for "http://127.0.0.1:$FRONTEND_PORT/" 200
+    uv run --locked python - <<'PYTHON'
+import os
+import signal
+import subprocess
+from pathlib import Path
+
+records = list(Path(".dev").glob("serve-*.pid"))
+assert len(records) == 1
+record = records[0]
+supervisor = int(record.read_text())
+os.kill(supervisor, signal.SIGSTOP)
+try:
+    result = subprocess.run(["just", "stop"], timeout=15)
+    assert result.returncode != 0, "Paused supervisor incorrectly reported stopped"
+    assert record.exists(), "Paused supervisor lost its control record"
+    assert Path(f"{record}.stop").exists(), "Shutdown request was lost"
+finally:
+    os.kill(supervisor, signal.SIGCONT)
+PYTHON
+    wait_exit "$server_pgid"
+    server_pgid=""
+    assert_stopped
+    echo "Paused supervisor retained its record and handled shutdown after resuming."
+
     # A failing server stops the other and makes `just up` fail.
     start_group just up
     up_pid=$server_pgid
@@ -171,18 +239,18 @@ else
     echo "A failed server stopped the other."
 
     # Independently started servers, stopped from another terminal.
-    start_group just backend
+    TZ=UTC start_group just backend
     backend_pid=$server_pgid
-    start_group just frontend
+    TZ=UTC start_group just frontend
     frontend_pid=$server_pgid
     server_pgid=""
     wait_for "http://127.0.0.1:$DJANGO_PORT/health/" 200
     wait_for "http://localhost:$FRONTEND_PORT/api/me" 401
-    just stop
+    TZ=Asia/Tokyo just stop
     wait_exit "$backend_pid"
     wait_exit "$frontend_pid"
     assert_stopped
-    echo "just stop stopped independently started servers."
+    echo "just stop stopped independently started servers across different time zones."
 fi
 just lint
 just typecheck
