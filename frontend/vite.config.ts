@@ -5,6 +5,8 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
     plugins: [react(), tailwindcss()],
+    // Django uses the manifest to distinguish versioned build assets from unchanged public/ files.
+    build: { manifest: true },
     resolve: {
         alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
     },

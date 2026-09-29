@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 INDEX = b'<!doctype html><div id="root"></div><script type="module" src="/assets/index-Ab1_cD2e.js"></script>'
@@ -10,6 +12,20 @@ def build(settings):
     (settings.FRONTEND_DIR / "assets").mkdir()
     (settings.FRONTEND_DIR / "index.html").write_bytes(INDEX)
     (settings.FRONTEND_DIR / "assets" / "index-Ab1_cD2e.js").write_text("console.log('app')")
+    (settings.FRONTEND_DIR / "assets" / "index-Cd3_eF4g.css").write_text("body { margin: 0 }")
+    (settings.FRONTEND_DIR / "assets" / "icon-Ef5_gH6i.svg").write_text("<svg/>")
+    (settings.FRONTEND_DIR / ".vite").mkdir()
+    (settings.FRONTEND_DIR / ".vite" / "manifest.json").write_text(
+        json.dumps(
+            {
+                "index.html": {
+                    "file": "assets/index-Ab1_cD2e.js",
+                    "css": ["assets/index-Cd3_eF4g.css"],
+                    "assets": ["assets/icon-Ef5_gH6i.svg"],
+                }
+            }
+        )
+    )
     (settings.FRONTEND_DIR / "robots.txt").write_text("User-agent: *")
     return settings.FRONTEND_DIR
 
@@ -31,13 +47,20 @@ def test_head_is_allowed_and_other_methods_are_not(client, build):
         response = method("/account", **HTML)
         assert response.status_code == 405
         assert response.content != INDEX
+        assert response["Cache-Control"] == "no-cache"
+        assert "Accept" in response["Vary"]
 
 
+@pytest.mark.parametrize("method", ["get", "head"])
 @pytest.mark.parametrize("accept", ["*/*", "application/json", "image/avif,image/webp,*/*;q=0.8", "text/html;q=0"])
-def test_non_navigation_requests_do_not_get_the_spa(client, build, accept):
-    response = client.get("/account", HTTP_ACCEPT=accept)
+def test_non_navigation_requests_do_not_get_the_spa(client, build, accept, method):
+    response = getattr(client, method)("/account", HTTP_ACCEPT=accept)
     assert response.status_code == 404
     assert response.content != INDEX
+    assert response["Cache-Control"] == "no-cache"
+    assert "Accept" in response["Vary"]
+    # The same URL still serves HTML after the rejected request.
+    assert client.get("/account", **HTML).content == INDEX
 
 
 @pytest.mark.parametrize(
@@ -72,13 +95,19 @@ def test_backend_routes_take_precedence(client, build):
     assert client.get("/api/auth/browser/v1/config", **HTML).status_code == 200
 
 
-def test_hashed_assets_are_immutable_and_other_build_files_are_not(client, build):
-    asset = client.get("/assets/index-Ab1_cD2e.js")
+@pytest.mark.parametrize("filename", ["index-Ab1_cD2e.js", "index-Cd3_eF4g.css", "icon-Ef5_gH6i.svg"])
+def test_manifest_assets_are_immutable(client, build, filename):
+    asset = client.get(f"/assets/{filename}")
     assert asset.status_code == 200
     assert asset["Cache-Control"] == "max-age=315360000, public, immutable"
-    robots = client.get("/robots.txt")
-    assert robots.status_code == 200
-    assert "immutable" not in robots["Cache-Control"]
+
+
+@pytest.mark.parametrize("path", ["robots.txt", "assets/logo.svg", "assets/logo-Ab1_cD2e.svg"])
+def test_public_files_are_not_immutable_even_with_hash_like_names(client, build, path):
+    (build / path).write_text("public file")
+    asset = client.get(f"/{path}")
+    assert asset.status_code == 200
+    assert "immutable" not in asset["Cache-Control"]
     # Direct requests for the entry file also revalidate.
     assert client.get("/index.html")["Cache-Control"] == "no-cache"
 
@@ -90,5 +119,15 @@ def test_api_responses_are_not_cacheable(client):
         assert "no-store" in cache_control and "private" in cache_control, path
 
 
+def test_assets_without_a_manifest_are_not_immutable(client, build):
+    (build / ".vite" / "manifest.json").unlink()
+    asset = client.get("/assets/index-Ab1_cD2e.js")
+    assert asset.status_code == 200
+    assert "immutable" not in asset["Cache-Control"]
+
+
 def test_missing_build_is_a_404_not_an_error(client):
-    assert client.get("/", **HTML).status_code == 404
+    response = client.get("/", **HTML)
+    assert response.status_code == 404
+    assert response["Cache-Control"] == "no-cache"
+    assert "Accept" in response["Vary"]

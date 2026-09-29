@@ -21,6 +21,7 @@ def check_release(client: httpx.Client) -> None:
         page = client.get(path, headers=NAVIGATION)
         assert page.status_code == 200, (path, page.status_code)
         assert page.headers["cache-control"] == "no-cache", path
+        assert "Accept" in page.headers["vary"], path
         assert SPA_MARKER in page.text, path
     assert page.headers["server"].startswith("gunicorn")
     assert client.head("/account", headers=NAVIGATION).status_code == 200
@@ -42,7 +43,13 @@ def check_release(client: httpx.Client) -> None:
         assert response.status_code == 404, (path, response.status_code)
         assert SPA_MARKER not in response.text, path
         assert "URLconf" not in response.text, "DEBUG must be off"
-    assert client.get("/account", headers={"Accept": "*/*"}).status_code == 404
+    for accept in ("*/*", "application/json"):
+        for method in (client.get, client.head):
+            rejected = method("/account", headers={"Accept": accept})
+            assert rejected.status_code == 404
+            assert rejected.headers["cache-control"] == "no-cache"
+            assert "Accept" in rejected.headers["vary"]
+        assert client.get("/account", headers=NAVIGATION).status_code == 200
     assert client.get("/admin", headers=NAVIGATION).headers["location"] == "/admin/"
     assert client.get("/admin/", headers=NAVIGATION).headers["location"].startswith("/admin/login/")
     assert client.get("/health/").json() == {"status": "ok"}

@@ -33,7 +33,7 @@ CI runs it for generated projects. In the template checkout, `just template-test
 | `/api/*` | Django Ninja |
 | `/admin/*` | Unfold/Django admin |
 | `/static/*` | admin and Django static files (collectstatic, manifest-hashed) |
-| `/assets/*` | Vite's content-hashed JS/CSS, served as built |
+| `/assets/*` | Vite build assets and any public files copied there, served as built |
 | `/health/` | database readiness probe |
 | other GET/HEAD navigations accepting HTML | `frontend/dist/index.html`; React Router renders the route |
 
@@ -41,6 +41,8 @@ Missing assets, static files and API endpoints return 404, never the SPA. So do 
 `assets`, `health`, `media` and `static` prefixes, and requests that do not accept HTML. Other methods on SPA routes
 return 405 (or 403 first if CSRF fails). Unknown client routes return 200 with the SPA, which shows its not-found screen.
 Files placed in `frontend/public/` are served from the site root with a 60-second cache, since they are not hashed.
+This also applies to public files under `/assets/`. Only Vite assets listed in `.vite/manifest.json` receive
+immutable caching. SPA responses always revalidate and vary on `Accept`, including 404 and 405 responses.
 
 ## Required configuration
 
@@ -63,6 +65,8 @@ Run `python manage.py check --deploy` against production settings and address it
 Terminate TLS at the platform's load balancer or reverse proxy, redirect HTTP to HTTPS there, and set HSTS there
 once the domain is committed to HTTPS. Forward requests to port 8000 with the original `Host` header. Django does not
 redirect to HTTPS itself: the container health check calls it over plain HTTP.
+The current synchronous Gunicorn workers also need the proxy to buffer incoming requests
+([Gunicorn design](https://gunicorn.org/design/)); direct browser connections can occupy a worker waiting for request data.
 
 Django sees the proxy's plain-HTTP connection. Choose one way to make CSRF origin checks match the browser's HTTPS
 origin:

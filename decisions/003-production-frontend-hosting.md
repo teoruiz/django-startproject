@@ -19,9 +19,13 @@ Missing files under `/assets/` or `/static/`, missing `/api/` endpoints and the 
 not accept HTML (404), such as scripts, images and API clients. React Router renders unknown client routes, including
 its not-found screen. Because the server cannot know client routes, those responses are HTTP 200.
 
-Caching: Vite content-hashes every file it emits under `assets/`, so WhiteNoise marks them immutable for ten years.
+Caching: Vite emits `.vite/manifest.json` listing its versioned JS, CSS and imported assets. WhiteNoise marks only
+those build files immutable for ten years. Files copied unchanged from `frontend/public/` keep the default short
+cache lifetime, including files under `assets/` or with names that happen to look hashed.
 The Vite build is served as-is instead of through Django staticfiles, which would hash and rewrite it a second time.
 The entry page and other HTML are `Cache-Control: no-cache`, so every navigation revalidates and picks up a new release.
+Every SPA response, including rejected requests and missing-build errors, also has `Vary: Accept` and
+`Cache-Control: no-cache`, so a cached non-HTML rejection cannot replace an HTML navigation.
 `/api/` responses without explicit caching get Django's never-cache headers, keeping session data out of shared caches.
 Release images precompress the build with WhiteNoise, and collectstatic still compresses admin assets.
 

@@ -47,6 +47,20 @@ template-test compose` does the same for a fresh project.) Also verify:
 Do not add Playwright dependencies just to run this manual verification. Persistent browser tests
 are a separate product decision for important regression-critical flows.
 
+## Frontend cache fixes validation record — 2026-09-29
+
+- Fresh `just template-test` and `just template-test compose` generations passed: 55 pytest tests each,
+  system checks, migrations, lint, Python/TypeScript checks, API contracts and frontend builds.
+- A real Vite build with public SVGs, including a name resembling a hash, copied them unchanged and served them
+  with `max-age=60, public`. Manifest-listed JS/CSS remained immutable. A missing manifest also kept assets mutable.
+- The PostgreSQL release image passed its HTTP smoke checks, including `Vary: Accept` and `no-cache` on rejected
+  GET/HEAD requests, followed by successful HTML navigation to the same URL.
+- agent-browser verified the production image's authenticated account rendering, refresh, API/task calls,
+  direct unknown-route navigation, styled admin and logout. No browser console or JavaScript errors were recorded.
+  Extended direct-to-Gunicorn browsing also briefly showed an account-load error; retry recovered. The unchanged
+  synchronous runner logged a worker timeout while waiting for HTTP request data, before Django handled a route.
+  Proxy buffering and worker selection need separate production verification.
+
 ## Production frontend hosting validation record — 2026-09-28
 
 Validated fresh artifacts generated from the local working template after adding the SPA to the release image:

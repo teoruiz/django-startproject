@@ -21,7 +21,7 @@ RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked --no-dev
 FROM base AS release
 COPY --exclude=frontend . .
 COPY --from=frontend /frontend/dist frontend/dist
-# Vite already content-hashes the build, so WhiteNoise serves it directly (not via collectstatic) with precompressed files.
+# WhiteNoise serves the Vite build directly (not via collectstatic); its manifest identifies versioned assets.
 RUN python -m whitenoise.compress --quiet frontend/dist \
     && DATABASE_URL=sqlite://:memory: SECRET_KEY=build-only python manage.py collectstatic --noinput
 RUN useradd --create-home app && chown -R app:app /app
