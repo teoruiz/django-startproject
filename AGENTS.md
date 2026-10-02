@@ -1,223 +1,69 @@
-# CLAUDE.md
+# Working on the application
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+These instructions guide product development in the generated Django/React application.
+Read [README.md](README.md) for setup and [architecture](docs/architecture.md) for system boundaries.
+Keep this guide concise and update it as the product gains domain-specific conventions.
 
-## Python Package Management with uv
+## Find the relevant code
 
-Use uv exclusively for Python package management in this project.
+- `config/`: Django settings, URLs and application entry points.
+- `core/`: identity, admin, initial Ninja API, task example and backend tests.
+- `frontend/src/`: React routes, API clients and components; `components/ui/` contains shadcn/ui.
+- `domains/`, `ux/`, `decisions/`: domain rules, user flows and architecture decisions; `docs/` holds engineering guidance.
 
-### Package Management Commands
+## Before implementation
 
-- All Python dependencies **must be installed, synchronized, and locked** using uv
-- Never use pip, pip-tools, poetry, or conda directly for dependency management
+- Inspect existing code and the relevant domain/UX notes before extending a feature.
+- Make domain decisions explicit in `domains/` and material architecture choices in `decisions/` before implementation.
+- Describe UX states, errors and acceptance criteria in `ux/` when practical. Paper is the visual design workspace;
+  record relevant document/frame links there.
+- Keep abstractions proportional to actual requirements. Extend established patterns and components.
 
-Use these commands:
+## Local development and checks
 
-- Install dependencies: `uv add <package>`
-- Remove dependencies: `uv remove <package>`
-- Sync dependencies: `uv sync`
+- Use uv exclusively for Python and pnpm for frontend dependencies. Commit `uv.lock` and `frontend/pnpm-lock.yaml`;
+  bootstrap consumes locks, and dependency upgrades are an explicit action. Versions and lint settings live in config.
+- `just bootstrap` installs dependencies, starts PostgreSQL and migrates. `just up` runs Django and Vite on the host;
+  `just backend` / `just frontend` run them separately. Compose is only for PostgreSQL; do not add development containers.
+- Ctrl-C or `just stop` stops local servers; `just down` also stops PostgreSQL and retains its data.
+- Configure ports and environment in `.env` using `.env-dist`; use `.venv/bin/python` as the editor interpreter.
+- `just manage <command>` runs Django management commands; `just test` runs pytest against PostgreSQL.
+- Run focused tests while iterating and `just check` before handing off application changes. It includes lint,
+  Python/TypeScript checks, API contract checks, frontend build and tests. Report what ran and any remaining failures.
+- Run `just release-check` after changing the Dockerfile, dependencies, settings, URL routing or static/frontend serving.
+  It runs the release image with DEBUG=false against disposable PostgreSQL.
 
-## Development Commands
+## Backend rules
 
-This project uses `just` for task management. Key commands:
+- Django owns domain models, invariants, permissions, workflows and authorization. Use the ORM and Ninja.
+  PostgreSQL is authoritative for development and production; SQLite is only for disposable validation.
+- Read [backend conventions](docs/backend-conventions.md) before changing models, migrations or admin.
+  Use `TimeStampedModel`, documented fields, explicit choices/relationships and Unfold admin classes/inlines.
+- Allauth Headless owns authentication through browser sessions with CSRF. Scope queries and authorize domain actions
+  in Django; authenticated users are not automatically authorized for every object. Never disable CSRF to fix a proxy.
+- Use `django.tasks` for work. ImmediateBackend is synchronous and non-durable, for development/tests only.
+  Add a durable backend only when a production workflow requires it; no django-q2, Celery, Redis or RabbitMQ.
+- Supabase and Go are absent. Optional Supabase Realtime/Storage may later provide infrastructure; never add Supabase
+  Auth, direct browser/database CRUD, Edge Functions or business authorization in RLS. Go is for independent services only.
+- The release image serves Django and the built SPA from one origin ([decision 003](decisions/003-production-frontend-hosting.md),
+  [production release](docs/deployment.md)). Keep the SPA fallback URL last; add new top-level backend prefixes to its
+  reserved list. Hosting vendor and durable task execution remain deployment decisions; a passing check is not a deployment.
 
-- `just bootstrap` - Initialize project with dependencies and environment
-- `just up` - Start Django development server on http://localhost:8000/
-- `just down` - Stop all containers
-- `just test` - Run pytest tests
-- `just lint` - Run pre-commit hooks (includes ruff, djlint, etc.)
-- `just manage <command>` - Run Django management commands
-- `just console` - Open bash shell in web container
-- `just build` - Build Docker containers
+## Frontend and API workflow
 
-## Architecture Overview
+- React/TypeScript/Vite is the product frontend. Use existing shadcn/ui and project/domain components before adding primitives.
+  Use React Router for navigation and TanStack Query for server state. Django templates support admin/infrastructure pages.
+- Ninja OpenAPI is the business contract; authentication types come from installed allauth's schema.
+  Run `just api-generate` after contract changes and commit the generated types. Never hand-edit or duplicate those schemas.
+- Use the existing openapi-fetch clients and relative `/api/...` URLs. Preserve session cookies and CSRF handling;
+  frontend route guards are presentation, not authorization.
+- Verify UI changes with agent-browser in the running application, including relevant routing, auth/API flows and console errors.
+  Follow [browser verification](docs/verification.md). Playwright is not baseline tooling; persistent tests are reserved
+  for important regression-critical flows.
 
-This is a Django 5.1 application with modern frontend tooling and API support:
+## Template maintenance — only when `manage.py` is absent
 
-**Core Structure:**
-- `config/` - Django project configuration and settings
-- `core/` - Main Django app with views, models, and API endpoints
-- `frontend/` - Frontend assets including Tailwind CSS configuration
-- `templates/` - Django HTML templates
-
-**Key Technologies:**
-- Django 6.0 with Python 3.13
-- Django Ninja for API development (endpoints in `core/api.py`)
-- Tailwind CSS v4 with CSS-first configuration and DaisyUI components
-- PostgreSQL 17 database with Docker
-- HTMX for dynamic interactions
-- WhiteNoise for static file serving
-- UV for dependency management
-
-**API Development:**
-- API endpoints are defined in `core/api.py` using Django Ninja
-- Base API URL: `/api/` (configured in `core/urls.py`)
-- Example endpoint: `/api/hello` returns "Hello world"
-
-**Frontend Development:**
-- Tailwind CSS v4 configuration in `frontend/css/source.css`
-- Uses `@import "tailwindcss"` syntax (not `@tailwind` directives)
-- DaisyUI components enabled via `@plugin "daisyui"`
-- Dark mode support configured with `@variant dark` directive
-- Configuration follows CSS-first approach with `@theme` directive
-
-**Database:**
-- PostgreSQL 17 with Docker
-- Database URL: `postgres:///rufisocios` (default)
-- Migrations: `just manage migrate`
-
-**Testing:**
-- pytest with Django integration
-- Configuration in `pyproject.toml`
-- Test settings in `conftest.py`
-- Run with: `just test`
-
-**Environment:**
-- Environment variables in `.env` file (created from `.env-dist`)
-- Settings managed via `environs` library
-- Docker Compose for development environment with file watching
-- UV for Python dependency management
-
-## Important Configuration Files
-
-- `justfile` - Task runner configuration
-- `pyproject.toml` - Python project configuration, pytest settings, ruff linting
-- `compose.yml` - Docker Compose configuration
-- `config/settings.py` - Django settings
-- `frontend/css/source.css` - Tailwind CSS v4 configuration
-- `.cursor/rules/tailwind-css-4.mdc` - Tailwind CSS v4 guidance for development
-
-## Django Model Patterns
-
-Follow these patterns when creating Django models:
-
-**Base Model:**
-- Always use `TimeStampedModel` from `django_extensions.db.models` as the base class instead of `models.Model`
-- This automatically provides `created` and `modified` timestamp fields
-
-**Model Structure:**
-- Define `TextChoices` classes inside the model for status and type fields
-- Use descriptive choice values with proper labels (e.g., `DRAFT = "draft", "Draft"`)
-- Place all choice classes at the top of the model definition
-
-**Field Patterns:**
-- Use `CharField` with `choices` parameter for status and type fields
-- Set sensible `default` values for choice fields
-- Use `TextField` for longer text content with descriptive `help_text`
-- Use `ArrayField` from `django.contrib.postgres.fields` for lists
-- Set `blank=True, default=list` for ArrayFields to avoid nullable arrays
-- Use `ForeignKey` with `on_delete=models.SET_NULL` for optional relationships
-- Include `null=True, blank=True` for optional foreign keys
-- Always set a descriptive `related_name` for foreign keys
-
-**Field Documentation:**
-- Always include `help_text` for fields to document their purpose
-- Use clear, descriptive field names that explain their content
-
-**Meta Options:**
-- Define `Meta` class with:
-  - `ordering` - typically `["-created"]` for newest first
-  - `verbose_name` and `verbose_name_plural`
-
-**Methods:**
-- Implement `__str__()` to return a meaningful string representation
-- Use `@property` decorators for computed fields that aggregate model data
-- Return dictionaries from properties when aggregating multiple related fields
-
-**Example Model Structure:**
-```python
-from django.db import models
-from django.contrib.postgres.fields import ArrayField
-from django_extensions.db.models import TimeStampedModel
-
-
-class MyModel(TimeStampedModel):
-    class StatusChoices(models.TextChoices):
-        DRAFT = "draft", "Draft"
-        PUBLISHED = "published", "Published"
-
-    title = models.CharField(max_length=200)
-    status = models.CharField(
-        max_length=20,
-        choices=StatusChoices.choices,
-        default=StatusChoices.DRAFT
-    )
-    description = models.TextField(
-        blank=True,
-        help_text="Detailed description of the item"
-    )
-    tags = ArrayField(
-        models.CharField(max_length=50),
-        blank=True,
-        default=list,
-        help_text="List of tags"
-    )
-    parent = models.ForeignKey(
-        "self",
-        on_delete=models.SET_NULL,
-        related_name="children",
-        null=True,
-        blank=True,
-    )
-
-    class Meta:
-        ordering = ["-created"]
-        verbose_name = "My Model"
-        verbose_name_plural = "My Models"
-
-    def __str__(self):
-        return f"{self.title} ({self.status})"
-
-    @property
-    def metadata(self):
-        """Returns complete metadata as a dictionary"""
-        return {
-            "timestamp": self.created,
-            "title": self.title,
-            "status": self.status,
-        }
-```
-
-## Linting and Code Quality
-
-- Ruff for Python linting and formatting
-- djlint for Django template linting
-- Pre-commit hooks configured
-- Target Python version: 3.13
-- Line length: 120 characters
-
-## Django Admin with Unfold
-
-This project uses **Django Unfold** for a modern admin interface.
-
-**Setup:**
-- Django Unfold is already installed and configured in `INSTALLED_APPS`
-- "unfold" must be placed before "django.contrib.admin" in settings
-
-**Admin Class Patterns:**
-- Always import from `unfold.admin` instead of `django.contrib.admin`
-- Use `ModelAdmin` from `unfold.admin` for model admin classes
-- Use `TabularInline` from `unfold.admin` for inline classes (not Django's default)
-- Use `StackedInline` from `unfold.admin` for stacked inline classes
-
-**Example Admin Structure:**
-```python
-from django.contrib import admin
-from unfold.admin import ModelAdmin, TabularInline
-
-from .models import MyModel, RelatedModel
-
-
-class RelatedModelInline(TabularInline):  # Use Unfold's TabularInline
-    model = RelatedModel
-    extra = 1
-    fields = ["name", "status"]
-
-
-@admin.register(MyModel)
-class MyModelAdmin(ModelAdmin):  # Use Unfold's ModelAdmin
-    list_display = ["name", "status", "created"]
-    list_filter = ["status"]
-    search_fields = ["name"]
-    inlines = [RelatedModelInline]
-```
+- In the template checkout, the generated application is the artifact. Run `just template-test` against a fresh local
+  generation; also run `just template-test compose` for PostgreSQL, Docker, release-image or development-server changes.
+- Generate with Django's standard `startproject --template` command. Render only Python; preserve JS/TS/Just/Actions braces.
+  The validation script filters local secrets/caches. Never validate only the template source tree.

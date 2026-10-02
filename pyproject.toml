@@ -1,117 +1,53 @@
 [project]
-name = "{{ project_name }}"
-version = "2026.1.1"
-description = "Add your description here"
-readme = "README.md"
+name = "django-product"
+version = "0.1.0"
+description = "Django application backend"
 requires-python = ">=3.13"
 dependencies = [
-    "blessed",
-    "django",
-    "django-click",
-    "django-q2",
-    "django-health-check",
-    "django-prodserver",
-    "environs[django]",
-    "psycopg[binary]",
-    "whitenoise",
-    "whitenoise",
-    "django-ninja",
-    "django-htmx",
-    "httpx",
-    "django-storages",
-    "django-extensions",
-    "django-tailwind-cli[django-extensions]",
-    "django-unfold",
-    "uvicorn",
+    "django>=6.1.1,<6.2",
+    "django-allauth[headless,headless-spec]>=65.19.4,<66",
+    "django-ninja>=1.4,<2",
+    "django-unfold>=0.70,<1",
+    "django-storages>=1.14,<2",
+    "django-extensions>=4,<5",
+    "environs[django]>=14,<15",
+    "psycopg[binary]>=3.2,<4",
+    "httpx>=0.28,<1",
+    "whitenoise>=6.9,<7",
+    "gunicorn>=23,<26",
 ]
 
 [dependency-groups]
 dev = [
-    "django-test-plus",
-    "model-bakery",
-    "pytest",
-    "pytest-django",
-    "pre-commit",
-    "django-browser-reload",
-    "django-test-plus",
-    "djlint",
-    "django-types",
+    "pytest>=8,<10",
+    "pytest-django>=4.11,<5",
+    "model-bakery>=1.20,<2",
+    "ruff>=0.14,<1",
+    "basedpyright>=1.31,<2",
+    "pre-commit>=4,<5",
+    "django-stubs>=6.0,<7",
 ]
-
-[tool.bumpver]
-commit = true
-commit_message = ":bookmark: bump version {old_version} -> {new_version}"
-current_version = "2026.1.1"
-push = false  # disabled for GitHub Actions
-tag = true
-version_pattern = "YYYY.MM.INC1"
 
 [tool.uv]
 package = false
 
-[tool.bumpver.file_patterns]
-"config/__init__.py" = [
-    '__version__ = "{version}"',
-]
-"pyproject.toml" = [
-  'version = "{version}"'
-]
-
-[tool.coverage.run]
-omit = [
-    "*/admin.py",
-    "*/manage.py",
-    "*/migrations/*",
-    "*/tests/*",
-    "conftest.py",
-]
-
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings"
-addopts = "--nomigrations --reuse-db"
-norecursedirs = ".git* frontend media static templates"
-python_files = "test_*.py"
+python_files = ["test_*.py"]
+testpaths = ["core/tests"]
 
 [tool.basedpyright]
-# typeCheckingMode = "standard"
-
-# kill the Django-unsafe ones
-reportUnannotatedClassAttribute = "none"
-reportIncompatibleVariableOverride = "none"
-reportImplicitOverride = "none"
+include = ["config", "core", "conftest.py"]
+exclude = ["**/migrations", "**/__pycache__"]
+pythonVersion = "3.13"
+typeCheckingMode = "standard"
+venvPath = "."
+venv = ".venv"
 
 [tool.ruff]
-# Exclude a variety of commonly ignored directories.
-exclude = [
-    ".bzr",
-    ".direnv",
-    ".eggs",
-    ".git",
-    ".github",
-    ".hg",
-    ".ruff_cache",
-    ".svn",
-    ".tox",
-    ".venv",
-    "__pypackages__",
-    "_build",
-    "build",
-    "dist",
-    "migrations",
-    "node_modules",
-    "static",
-]
-# Same as Black.
 line-length = 120
 target-version = "py313"
+extend-exclude = ["migrations", "frontend", "staticfiles"]
 
 [tool.ruff.lint]
-# Allow unused variables when underscore-prefixed.
-dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
-# Allow autofix for all enabled rules (when `--fix`) is provided.
-fixable = ["A", "B", "C", "D", "E", "F"]
-ignore = ["E501", "E741"]                # temporary
-per-file-ignores = {}
-# Enable Pyflakes `E` and `F` codes by default.
-select = ["E", "F"]
-unfixable = []
+select = ["E", "F", "I", "UP", "B"]

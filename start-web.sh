@@ -1,6 +1,4 @@
 #!/bin/sh
-uv run -m manage migrate --noinput
-
-uv run -m manage collectstatic --noinput
-
-uv run -m manage prodserver web
+set -eu
+# Apply migrations as an explicit deployment step, never concurrently in web replicas.
+exec gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 2 --access-logfile -

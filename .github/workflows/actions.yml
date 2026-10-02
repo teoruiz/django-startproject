@@ -1,70 +1,53 @@
 name: CI
-
 on:
   pull_request:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
-
-env:
-  DOCKER_BUILDKIT: "1"
-
+permissions:
+  contents: read
 jobs:
-  test:
-    runs-on: ubuntu-24.04
-    name: Tests with Python
-
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: postgres
-        ports: ["5432:5432"]
-        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
-
+  validate:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        database: [sqlite, compose]
     steps:
       - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
         with:
-          fetch-depth: 1
-          path: ./src/github.com/${{ github.repository }}-git
-
-      - name: Enable caching
-        uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
           python-version: "3.13"
-
-      - name: Create a project based on our settings
-        run: |
-          uv run --with=django \
-            django-admin startproject \
-                --extension=ini,py,toml,yaml,yml \
-                --template=./src/github.com/${{ github.repository }}-git/ \
-                test_project
-
-      - name: Bootstrap project
-        run: |
-          cd test_project
-          cp .env-dist .env
-
-      - name: Lock dependencies with uv
-        run: |
-          cd test_project
-          uv lock
-
-      - name: Docker - Build image from starter project
-        run: |
-          cd test_project
-          docker compose pull
-          docker compose build
-
-      - name: Docker - Test generated starter project
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "10.28.1"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: extractions/setup-just@v3
+      - name: Validate template or generated application
         env:
-          DATABASE_URL: "postgres://postgres:postgres@localhost:${{ job.services.postgres.ports[5432] }}/postgres"
-          SECRET_KEY: "for-testing"
+          DATABASE: ${{ matrix.database }}
         run: |
-          cd test_project
-          docker compose run --rm utility uv run -m pytest
+          if [ ! -f manage.py ]; then
+            just template-test "$DATABASE"
+          elif [ "$DATABASE" = compose ]; then
+            just bootstrap
+            just manage check
+            just manage makemigrations --check --dry-run
+            just check
+            just release-check
+          else
+            export DATABASE_URL=sqlite:///ci.sqlite3 DJANGO_DEBUG=true
+            uv sync --locked
+            uv run --locked python manage.py check
+            uv run --locked python manage.py migrate --noinput
+            uv run --locked pytest
+            pnpm --dir frontend install --frozen-lockfile
+            just lint typecheck api-check frontend-build
+          fi
+      - name: PostgreSQL logs
+        if: failure()
+        run: test ! -f manage.py || docker compose logs db || true
+      - name: Remove development PostgreSQL
+        if: always()
+        run: test ! -f manage.py || docker compose down --volumes
